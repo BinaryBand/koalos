@@ -3,15 +3,21 @@
     "target": "ES6",
     "module": "commonjs",
     "declaration": true,
-    "resolveJsonModule": true,
     "rootDir": "./",
-    "outDir": "./lib/",
+    "outDir": "./dist",
     "strict": true,
     "moduleResolution": "node",
     "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "skipLibCheck": false,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "baseUrl": "./",
+    "paths": {
+      "@/*": ["src/*"],
+      "@public/*": ["public/*"]
+    }
   },
-  "include": ["src/**/*.ts", "__test__/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": ["./src/**/*", "./public/**/*", "__test__/**/*.ts"],
+  "exclude": ["node_modules", "./dist"]
 }

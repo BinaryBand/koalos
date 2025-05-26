@@ -1,0 +1,8 @@
+[
+  { "prim": "storage", "args": [{ "prim": "nat" }] },
+  { "prim": "parameter", "args": [{ "prim": "nat", "annots": ["%receive_balance"] }] },
+  {
+    "prim": "code",
+    "args": [[{ "prim": "CAR" }, { "prim": "NIL", "args": [{ "prim": "operation" }] }, { "prim": "PAIR" }]]
+  }
+]
