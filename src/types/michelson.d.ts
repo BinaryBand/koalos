@@ -1,10 +1,10 @@
 type Primitive = 'address' | 'bool' | 'bytes' | 'int' | 'nat' | 'string' | 'unit';
 
-interface MichelsonRecord extends Record<string, Michelson> {}
+interface MichelsonRecord extends Record<string, MichelsonSchema> {}
 
-type Michelson = Primitive | Complex | MichelsonRecord;
+interface IComplex {}
 
-type BigMapAbstraction = import('@taquito/taquito').BigMapAbstraction;
+type MichelsonSchema = Primitive | IComplex | MichelsonRecord;
 
 type StorageType =
   | string
@@ -16,12 +16,12 @@ type StorageType =
   | null
   | undefined;
 
-type PopulatedValue =
+type MichelsonStorage =
   | string
   | number
   | boolean
   | BigNumber
   | BigMapAbstraction
-  | PopulatedValue[]
-  | { [key: string]: PopulatedValue }
+  | MichelsonStorage[]
+  | { [key: string]: MichelsonStorage }
   | null;

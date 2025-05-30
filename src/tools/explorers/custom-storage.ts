@@ -3,10 +3,44 @@ import 'dotenv/config';
 
 import { BigMapAbstraction } from '@taquito/taquito';
 import { TokenSchema } from '@taquito/michelson-encoder';
-import { BigNumber } from 'bignumber.js';
-import { assert } from '@/tools/misc';
+import BigNumber from 'bignumber.js';
+import { assert } from '../misc.js';
 
-export function recurseSchema(schema: TokenSchema): Michelson {
+export class Complex implements IComplex {
+  constructor(public type: 'map' | 'big_map' | 'list' | 'option' | 'lambda' | 'operation') {}
+}
+
+export class MichelsonMap extends Complex {
+  constructor(public key: string, public valueType: MichelsonSchema) {
+    super('map');
+  }
+}
+
+export class BigMap extends Complex {
+  constructor(public key: string, public valueType: MichelsonSchema) {
+    super('big_map');
+  }
+}
+
+export class List extends Complex {
+  constructor(public valueType: MichelsonSchema) {
+    super('list');
+  }
+}
+
+export class Optional extends Complex {
+  constructor(public argumentType: MichelsonSchema) {
+    super('option');
+  }
+}
+
+export class Lambda extends Complex {
+  constructor(public parameter: MichelsonSchema, public returnType: MichelsonSchema) {
+    super('lambda');
+  }
+}
+
+export function translateSchema(schema: TokenSchema): MichelsonSchema {
   switch (schema.__michelsonType) {
     case 'address':
     case 'bool':
@@ -17,29 +51,30 @@ export function recurseSchema(schema: TokenSchema): Michelson {
     case 'unit':
       return schema.__michelsonType;
     case 'pair':
-      const pair: Record<string, Michelson> = {};
+      const pair: Record<string, MichelsonSchema> = {};
       for (const [key, val] of Object.entries(schema.schema)) {
-        pair[key] = recurseSchema(val);
+        pair[key] = translateSchema(val);
       }
       return pair;
     case 'option':
-      return new Optional(recurseSchema(schema.schema));
+      return new Optional(translateSchema(schema.schema));
     case 'map':
-      return new MichelsonMap(schema.schema.key.__michelsonType, recurseSchema(schema.schema.value));
+      return new MichelsonMap(schema.schema.key.__michelsonType, translateSchema(schema.schema.value));
     case 'big_map':
-      return new BigMap(schema.schema.key.__michelsonType, recurseSchema(schema.schema.value));
+      return new BigMap(schema.schema.key.__michelsonType, translateSchema(schema.schema.value));
     case 'list':
-      return new List(recurseSchema(schema.schema));
+      return new List(translateSchema(schema.schema));
     case 'lambda':
-      return new Lambda(recurseSchema(schema.schema.parameters), recurseSchema(schema.schema.returns));
+      return new Lambda(translateSchema(schema.schema.parameters), translateSchema(schema.schema.returns));
     case 'operation':
+    case 'timestamp':
       return new Complex('operation');
     default:
       throw new Error(`Unsupported schema type: ${schema.__michelsonType}`);
   }
 }
 
-export function populateValues(schema: Michelson, storage: StorageType): PopulatedValue {
+export function populateSchema(schema: MichelsonSchema, storage: StorageType): MichelsonStorage {
   if (typeof storage === 'string' || typeof storage === 'number' || typeof storage === 'boolean') {
     assert(typeof schema === 'string', `Expected ${schema} but got ${typeof storage}`);
     return storage;
@@ -54,16 +89,16 @@ export function populateValues(schema: Michelson, storage: StorageType): Populat
     return storage;
   } else if (Array.isArray(storage)) {
     assert(schema instanceof List, `Expected ${schema} but got List`);
-    return storage.map(item => populateValues(schema.valueType, item));
+    return storage.map(item => populateSchema(schema.valueType, item));
   } else if (schema instanceof Optional) {
-    return storage ? populateValues(schema.argumentType, storage) : null;
+    return storage ? populateSchema(schema.argumentType, storage) : null;
   } else if (schema instanceof Complex) {
     throw new Error(`Unsupported complex type: ${schema.type}`);
   } else if (typeof schema === 'object') {
-    const populated: Record<string, PopulatedValue> = {};
+    const populated: Record<string, MichelsonStorage> = {};
     for (const key in schema) {
       if (schema.hasOwnProperty(key) && storage?.hasOwnProperty(key)) {
-        populated[key] = populateValues((schema as MichelsonRecord)[key], storage[key]);
+        populated[key] = populateSchema((schema as MichelsonRecord)[key], storage[key]);
       }
     }
     return populated;

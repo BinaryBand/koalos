@@ -1,23 +1,20 @@
 {
   "compilerOptions": {
-    "target": "ES6",
-    "module": "commonjs",
+    "target": "es2020",
+    "module": "Node16",
     "declaration": true,
-    "rootDir": "./",
+    "rootDir": "./src",
     "outDir": "./dist",
     "strict": true,
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "esModuleInterop": true,
     "skipLibCheck": false,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "sourceMap": true,
-    "baseUrl": "./",
-    "paths": {
-      "@/*": ["src/*"],
-      "@public/*": ["public/*"]
-    }
+    "typeRoots": ["./node_modules/@types", "./src/types/**/*"],
+    "baseUrl": "./"
   },
-  "include": ["./src/**/*", "./public/**/*", "__test__/**/*.ts"],
-  "exclude": ["node_modules", "./dist"]
+  "include": ["./src/**/*", "./public/**/*"],
+  "exclude": ["node_modules", "dist"]
 }
