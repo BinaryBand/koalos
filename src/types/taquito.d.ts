@@ -16,3 +16,12 @@ type MichelsonMap<
 > = import('@taquito/michelson-encoder').MichelsonMap<T, K>;
 
 type MichelsonExpression = import('@taquito/rpc').MichelsonV1Expression;
+
+type MichelsonExpressionExtended = import('@taquito/rpc').MichelsonV1ExpressionExtended;
+
+type ContractAbstraction<
+  A extends {} = {},
+  B extends {} = {},
+  C extends {} = {},
+  D extends {} = {}
+> = import('@taquito/taquito').ContractAbstraction<ContractProvider, {}, A, B, C, D>;

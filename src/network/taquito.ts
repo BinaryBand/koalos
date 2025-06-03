@@ -1,19 +1,34 @@
-import { BigMapAbstraction, ContractAbstraction, ContractProvider, TezosToolkit } from '@taquito/taquito';
-import { RpcClient, RpcClientCache, ScriptedContracts } from '@taquito/rpc';
+import 'dotenv/config';
+
+import { BigMapAbstraction, TezosToolkit } from '@taquito/taquito';
 import { MichelsonMap, Schema } from '@taquito/michelson-encoder';
-import { unwrapMichelsonMap } from '../metadata.js';
-import { assert } from '../misc.js';
+import { RpcClientCache, RpcClient } from '@taquito/rpc';
+import { InMemorySigner } from '@taquito/signer';
+import { getFromCache, setInCache } from './cache.js';
+import { unwrapMichelsonMap } from '../tools/michelson/michelson-map.js';
+import { assert } from '../tools/misc.js';
 
 const RPC_URLS: string[] = [
   'https://mainnet.tezos.ecadinfra.com/',
-  'https://rpc.tzbeta.net/',
+  // 'https://rpc.tzbeta.net/',
   'https://mainnet.smartpy.io/',
+  // 'https://rpc.tzkt.io/mainnet/',
 ];
 
-const rpc: string = RPC_URLS[Math.floor(Math.random() * RPC_URLS.length)];
-const rpcClient: RpcClient = new RpcClient(rpc);
-const rpcClientCache: RpcClientCache = new RpcClientCache(rpcClient);
-const Tezos: TezosToolkit = new TezosToolkit(rpcClientCache);
+const TaquitoInstances: TezosToolkit[] = RPC_URLS.map((rpc: string) => {
+  const rpcClient: RpcClient = new RpcClient(rpc);
+  const rpcClientCache: RpcClientCache = new RpcClientCache(rpcClient);
+  const signer: InMemorySigner = new InMemorySigner(process.env['SECRET_KEY']!);
+  const Tezos: TezosToolkit = new TezosToolkit(rpcClientCache);
+  Tezos.setProvider({ signer });
+  return Tezos;
+});
+
+export default function Tezos(): TezosToolkit {
+  // Return a random instance of TezosToolkit
+  const randomIndex: number = Math.floor(Math.random() * TaquitoInstances.length);
+  return TaquitoInstances[randomIndex];
+}
 
 const TEZOS_REGEX: RegExp = /^tezos-storage:(?:\/\/(KT[1-9A-HJ-NP-Za-km-z]+)\/?)?((?:[0-9A-Za-z\-;?:@=&]|(?:%2))+)?$/;
 
@@ -27,7 +42,12 @@ export async function getFromTezos<T = unknown>(uri: string, defaultAddress?: st
   const [match, address, path] = TEZOS_REGEX.exec(uri) ?? [];
   assert(match !== undefined, `Invalid Tezos link: ${uri}`);
 
-  const contract: ContractAbstraction<ContractProvider> = await Tezos.contract.at(address ?? defaultAddress);
+  let cachedData: string | null = await getFromCache([address, path].join('/'));
+  if (cachedData !== null) {
+    return JSON.parse(cachedData) as T;
+  }
+
+  const contract: ContractAbstraction = await Tezos().contract.at(address ?? defaultAddress);
   const storage: unknown = await contract.storage();
 
   let rawData: unknown = storage;
@@ -60,6 +80,10 @@ export async function getFromTezos<T = unknown>(uri: string, defaultAddress?: st
     schema && rawData!.setType(schema);
     rawData = await unwrapMichelsonMap(rawData);
   }
+
+  // Cache the raw data for future use
+  cachedData = JSON.stringify(rawData);
+  await setInCache([uri, defaultAddress].join('/'), cachedData, 24 * 60 * 60); // Cache for 24 hours
 
   return rawData as T;
 }

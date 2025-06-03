@@ -9,21 +9,23 @@
 type OffChainView<N extends string = string> = {
   name: N;
   description: string;
-  implementations: (MichelsonStorageView | RestApiView)[];
+  implementations: OffChainStorageView[];
   pure: boolean;
 };
 
-type MichelsonStorageView = {
+type OffChainStorageView = OffChainMichelsonStorageView | OffChainRestApiView;
+
+type OffChainMichelsonStorageView = {
   michelsonStorageView: {
-    parameter?: MichelsonExpression;
+    parameter?: MichelsonExpressionExtended;
     returnType: MichelsonExpression;
-    code: MichelsonExpression[];
-    annotations?: MichelsonExpression[];
+    code: MichelsonExpressionExtended[];
+    annotations?: MichelsonExpressionExtended[];
     version?: string;
   };
 };
 
-type RestApiView = {
+type OffChainRestApiView = {
   restApiQuery: {
     specificationUri: string;
     baseUri: string;

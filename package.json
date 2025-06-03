@@ -31,6 +31,7 @@
     "@types/bignumber.js": "^4.0.3",
     "@types/elliptic": "^6.4.18",
     "@types/node": "^22.15.23",
+    "@types/sqlite3": "^3.1.11",
     "@typescript-eslint/eslint-plugin": "^4.22.0",
     "@typescript-eslint/parser": "^4.22.0",
     "eslint": "^7.25.0",
@@ -47,12 +48,18 @@
     "*.ts": "eslint --cache --cache-location .eslintcache --fix"
   },
   "dependencies": {
+    "@helia/dag-json": "^4.0.6",
+    "@helia/mfs": "^5.0.3",
+    "@helia/strings": "^4.0.6",
     "@helia/unixfs": "^5.0.3",
+    "@ipld/dag-pb": "^4.1.5",
     "@taquito/signer": "^22.0.0",
     "@taquito/taquito": "^22.0.0",
     "@taquito/tzip12": "^22.0.0",
     "bignumber.js": "^9.3.0",
     "dotenv": "^16.5.0",
-    "helia": "^5.4.2"
+    "helia": "^5.4.2",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
   }
 }

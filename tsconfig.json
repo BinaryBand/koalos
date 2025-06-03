@@ -6,6 +6,13 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "strict": true,
+    "noImplicitAny": true, // Disallow implicit 'any' types
+    "strictNullChecks": true, // Enable strict null checks
+    "strictFunctionTypes": true, // Enable strict checking of function types
+    "strictBindCallApply": true, // Enable stricter checking of bind, call, and apply methods
+    "strictPropertyInitialization": true, // Ensure class properties are initialized in the constructor
+    "noImplicitThis": true, // Disallow 'this' expressions with an implied 'any' type
+    "alwaysStrict": true, // Parse in strict mode and emit "use strict" for each source file
     "moduleResolution": "node16",
     "esModuleInterop": true,
     "skipLibCheck": false,
@@ -15,6 +22,6 @@
     "typeRoots": ["./node_modules/@types", "./src/types/**/*"],
     "baseUrl": "./"
   },
-  "include": ["./src/**/*", "./public/**/*"],
+  "include": ["./src/**/*"],
   "exclude": ["node_modules", "dist"]
 }

@@ -9,8 +9,6 @@
 // https://tzip.tezosagora.org/proposal/tzip-5/#entrypoints
 type TZip5Entrypoints = {
   transfer: (params: { from: string; to: string; value: BigNumber }) => ContractMethodObject;
-  getBalance: (owner: string) => ContractMethodObject;
-  getTotalSupply: (unit: UnitValue) => ContractMethodObject;
 };
 
 type TZip5Views = {
@@ -27,11 +25,10 @@ type TZip5Views = {
 // https://tzip.tezosagora.org/proposal/tzip-7/#entrypoints
 type TZip7Entrypoints = TZip5Entrypoints & {
   approve: (params: { spender: string; value: BigNumber }) => ContractMethodObject;
-  getAllowance: (params: { owner: string; spender: string }) => ContractMethodObject;
 };
 
 type TZip7Views = TZip5Views & {
-  getAllowance: (params: { owner: string; spender: string }) => ContractView<BigNumber>;
+  getAllowance: (owner: string, spender: string) => ContractView<BigNumber>;
 };
 
 /*****************************************************
@@ -40,21 +37,23 @@ type TZip7Views = TZip5Views & {
  * https://tzip.tezosagora.org/proposal/tzip-12
  *****************************************************/
 
+type Txs = {
+  to_: string; // Recipient address
+  token_id: number; // Token ID
+  amount: BigNumber; // Amount to transfer
+};
+
+type OpModifier = {
+  owner: string;
+  operator: string;
+  token_id: number;
+};
+
 // https://tzip.tezosagora.org/proposal/tzip-12/#interface-specification
 type TZip12Entrypoints = {
-  transfer: (params: {
-    from_: string;
-    txs: { to_: string; token_id: number; amount: BigNumber }[];
-  }) => ContractMethodObject;
-  balance_of: (
-    params: { owner: string; token_id: number }[]
-  ) => ContractView<{ request: { owner: string; token_id: BigNumber[] }; balance: BigNumber }[]>;
-  update_operators: (
-    ops: (
-      | { add_operator: { owner: string; operator: string; token_id: number } }
-      | { remove_operator: { owner: string; operator: string; token_id: number } }
-    )[]
-  ) => ContractMethodObject;
+  transfer: (params: { from_: string; txs: Txs[] }[]) => ContractMethodObject;
+  balance_of: (params: { owner: string; token_id: number }[]) => ContractMethodObject;
+  update_operators: (ops: ({ add_operator: OpModifier } | { remove_operator: OpModifier })[]) => ContractMethodObject;
 };
 
 type TZip12Views = {
