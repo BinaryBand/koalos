@@ -25,3 +25,10 @@ type ContractAbstraction<
   C extends {} = {},
   D extends {} = {}
 > = import('@taquito/taquito').ContractAbstraction<ContractProvider, {}, A, B, C, D>;
+
+interface OperationSignature {
+  bytes: string;
+  sig: string;
+  prefixSig: string;
+  sbytes: string;
+}

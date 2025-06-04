@@ -1,11 +1,12 @@
 import 'dotenv/config';
 
-import { BigMapAbstraction, TezosToolkit } from '@taquito/taquito';
+import { BigMapAbstraction, TezosToolkit, Signer } from '@taquito/taquito';
 import { MichelsonMap, Schema } from '@taquito/michelson-encoder';
 import { RpcClientCache, RpcClient } from '@taquito/rpc';
-import { InMemorySigner } from '@taquito/signer';
-import { getFromCache, setInCache } from './cache.js';
+import { b58cdecode, prefix } from '@taquito/utils';
+
 import { unwrapMichelsonMap } from '../tools/michelson/michelson-map.js';
+import { getFromCache, setInCache } from './cache.js';
 import { assert } from '../tools/misc.js';
 
 const RPC_URLS: string[] = [
@@ -15,12 +16,39 @@ const RPC_URLS: string[] = [
   // 'https://rpc.tzkt.io/mainnet/',
 ];
 
+// stub signature that won't be verified by tezos rpc simulate_operation
+const STUB_SIGNATURE: string =
+  'edsigtkpiSSschcaCt9pUVrpNPf7TTcgvgDEDD6NCEHMy8NNQJCGnMfLZzYoQj74yLjo9wx6MPVV29CvVzgi7qEcEUok3k7AuMg';
+const STUB_BUFFER: Uint8Array = b58cdecode(STUB_SIGNATURE, prefix.edsig);
+const STUB_PACKED: string = Buffer.from(STUB_BUFFER).toString('hex');
+
+class Forger implements Signer {
+  private _address: string;
+
+  constructor(address: string) {
+    this._address = address;
+  }
+
+  public sign = async (op: string) => ({
+    bytes: op,
+    sig: STUB_SIGNATURE,
+    prefixSig: STUB_SIGNATURE,
+    sbytes: op + STUB_PACKED,
+  });
+
+  public secretKey = async () => undefined;
+  public publicKey = async () => 'edpkuBknW28nW72KG6RoHtYW7p12T6GKc7nAbwYX5m8Wd9sDVC9yav';
+  public publicKeyHash = async () => this._address;
+}
+
 const TaquitoInstances: TezosToolkit[] = RPC_URLS.map((rpc: string) => {
   const rpcClient: RpcClient = new RpcClient(rpc);
   const rpcClientCache: RpcClientCache = new RpcClientCache(rpcClient);
-  const signer: InMemorySigner = new InMemorySigner(process.env['SECRET_KEY']!);
   const Tezos: TezosToolkit = new TezosToolkit(rpcClientCache);
+
+  const signer: Signer = new Forger(process.env['ADDRESS']!);
   Tezos.setProvider({ signer });
+
   return Tezos;
 });
 

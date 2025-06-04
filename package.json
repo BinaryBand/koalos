@@ -8,7 +8,8 @@
     "start": "tsc && node .",
     "test": "jest",
     "lint": "eslint ./src/ --fix",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "jsdoc": "jsdoc -a all -c jsdoc.json -r -R README.md dist/index.js -d docs/jsdoc && jsdoc2md --files index.js > docs/API.md"
   },
   "repository": {
     "type": "git",
@@ -34,10 +35,13 @@
     "@types/sqlite3": "^3.1.11",
     "@typescript-eslint/eslint-plugin": "^4.22.0",
     "@typescript-eslint/parser": "^4.22.0",
+    "docdash": "^2.0.2",
     "eslint": "^7.25.0",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-prettier": "^3.4.0",
+    "jsdoc": "^4.0.4",
+    "jsdoc-to-markdown": "^9.1.1",
     "lint-staged": "^13.2.1",
     "prettier": "^2.2.1",
     "ts-loader": "^9.5.2",
@@ -48,8 +52,6 @@
     "*.ts": "eslint --cache --cache-location .eslintcache --fix"
   },
   "dependencies": {
-    "@helia/dag-json": "^4.0.6",
-    "@helia/mfs": "^5.0.3",
     "@helia/strings": "^4.0.6",
     "@helia/unixfs": "^5.0.3",
     "@ipld/dag-pb": "^4.1.5",

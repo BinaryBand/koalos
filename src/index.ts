@@ -1,3 +1,5 @@
+'use strict';
+
 import { Estimate, PreparedOperation } from '@taquito/taquito';
 import BigNumber from 'bignumber.js';
 
@@ -11,7 +13,7 @@ import {
 } from './tools/smart-contracts/tokens/tokens.js';
 import { BatchWalletOperation } from '@taquito/taquito/dist/types/wallet/batch-operation.js';
 import { getMetadata, getTokenMetadata } from './tools/smart-contracts/tokens/metadata.js';
-import { getOmniWallet, getMetaWallet, estimateTransfers, sendTezos } from './tools/wallet.js';
+import { getOmniWallet, getMetaWallet, sendTezos } from './tools/wallet.js';
 import { initHelia, stopHelia } from './network/helia.js';
 import { initDatabase } from './network/cache.js';
 import Tezos from './network/taquito.js';
@@ -34,28 +36,28 @@ const FA: Record<string, [string, number]> = {
 };
 
 async function main(): Promise<void> {
-  await initDatabase();
+  // await initDatabase();
   // await initHelia();
 
-  console.log('Tezos:', (await getOmniWallet()).price.toPrecision(2), '$');
+  // console.log('Tezos:', (await getOmniWallet()).price.toPrecision(2), '$');
 
   const address: string = 'tz1TEGKFN9pUpLPvLZXgGjuVoWaebfJS9tuh';
-  const wallet: MetaWallet = await getMetaWallet(address);
-  console.log('User address:', address);
-  console.log('Balance:', wallet.balance, 'ꜩ');
-  console.log('Domain:', wallet.domain);
+  // const wallet: MetaWallet = await getMetaWallet(address);
+  // console.log('User address:', address);
+  // console.log('Balance:', wallet.balance, 'ꜩ');
+  // console.log('Domain:', wallet.domain);
 
   // const estimates: Estimate[] = await estimateTransfers(address, [
-  //   { to: address, amount: new BigNumber(1) },
-  //   { to: address, amount: new BigNumber(1) },
-  //   { to: address, amount: new BigNumber(1) },
+  //   { to: address, amount: new BigNumber(0.000001) },
+  //   { to: address, amount: new BigNumber(0.000001) },
+  //   { to: address, amount: new BigNumber(0.000001) },
   // ]);
   // console.log('Estimates for transfers:', estimates);
 
   const operation: ForgeParams = await sendTezos(address, [
-    { to: address, amount: new BigNumber(1) },
-    { to: address, amount: new BigNumber(1) },
-    { to: address, amount: new BigNumber(1) },
+    { to: address, amount: new BigNumber(0.000001) },
+    { to: address, amount: new BigNumber(0.000001) },
+    { to: address, amount: new BigNumber(0.000001) },
   ]);
   console.log(operation);
 

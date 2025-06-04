@@ -1,9 +1,23 @@
-import { Estimate, ForgeParams, OpKind, ParamsWithKind, PreparedOperation } from '@taquito/taquito';
-import { OperationContentsTransaction, OperationContentsAndResult } from '@taquito/rpc';
+import { Estimate, ForgeParams, OpKind, ParamsWithKind, PreparedOperation, TezosToolkit } from '@taquito/taquito';
+import { InMemorySigner } from '@taquito/signer';
+import {
+  OperationContentsAndResult,
+  OperationContentsAndResultTransaction,
+  PreapplyParams,
+  PreapplyResponse,
+  RPCRunOperationParam,
+} from '@taquito/rpc';
+import { LocalForger } from '@taquito/local-forging';
+import { b58cdecode, prefix } from '@taquito/utils';
+const Forger: LocalForger = new LocalForger();
 
 import { getTezosToUsdt } from '../tools/explorers/defi/quipuswap.js';
 import { addressToDomain } from '../tools/explorers/defi/domains.js';
 import Tezos from '../network/taquito.js';
+import { assert } from './misc.js';
+
+const MINIMAL_FEE_MUTEZ: number = 100;
+const MINIMAL_FEE_PER_GAS_MUTEZ: number = 0.1;
 
 // Metadata on Tezos
 export async function getOmniWallet(): Promise<OmniWallet> {
@@ -30,50 +44,70 @@ function prepareTransfers(source: string, recipients: TezosRecipient[]): ParamsW
   }));
 }
 
-export async function estimateTransfers(source: string, recipients: TezosRecipient[]): Promise<Estimate[]> {
-  const params: ParamsWithKind[] = prepareTransfers(source, recipients);
-  const estimates: Estimate[] = await Tezos().estimate.batch(params);
-  return estimates;
-}
+// ipfs://QmQXyEnXmKid7EDzFzAfRjkzDQUp3K5xeSVFCU7X1VZMbH/#transaction-cost
+export async function sendTezos(source: string, recipients: TezosRecipient[]): Promise<any> {
+  const tezos: TezosToolkit = Tezos();
 
-export async function sendTezos(source: string, recipients: TezosRecipient[]): Promise<ForgeParams> {
   const partialParams: ParamsWithKind[] = prepareTransfers(source, recipients);
+  const batchOp: PreparedOperation = await tezos.prepare.batch(partialParams);
 
-  console.log((await Tezos().rpc.getConstants()).hard_gas_limit_per_operation);
+  const appliedParams: PreapplyParams = await tezos.prepare.toPreapply(batchOp);
+  appliedParams[0].protocol = undefined;
 
-  const { counter } = await Tezos().rpc.getContract(source);
-  let curr: number = parseInt(counter ?? '0', 10);
+  /******************************
+   * Sign operation
+   * DO NOT USE IN PRODUCTION!
+   ******************************/
+  // const signer: InMemorySigner = new InMemorySigner(process.env['SECRET_KEY']!);
+  const forgedParams: ForgeParams = tezos.prepare.toForge(batchOp);
+  const forgedBytes: string = await Forger.forge(forgedParams);
+  // const operationSignature: OperationSignature = await signer.sign(forgedBytes, new Uint8Array([3]));
+  // const signature: string = operationSignature.prefixSig;
+  // appliedParams[0].signature = signature;
+  /******************************
+   * End of signing operation
+   ******************************/
 
-  console.log('Counter for source:', counter);
+  const { cost_per_byte, origination_size } = await tezos.rpc.getConstants();
+  const [costPerByte, originationSize] = [cost_per_byte.toNumber(), origination_size ?? 0];
+  const { chain_id } = await tezos.rpc.getBlockHeader();
 
-  const operationContentsTransactions: OperationContentsTransaction[] = recipients.map((rec: TezosRecipient) => ({
-    kind: OpKind.TRANSACTION,
-    source,
-    fee: '500',
-    gas_limit: '0',
-    storage_limit: '0',
-    amount: rec.amount.toString(),
-    destination: rec.to,
-    counter: `${++curr}`,
-  }));
-
-  const [branch, protocol]: [string, string] = await Tezos()
-    .rpc.getBlockHeader()
-    .then(header => [header.hash, header.protocol]);
-
-  const preparedOperation: PreparedOperation = {
-    opOb: {
-      branch,
-      contents: operationContentsTransactions,
-      protocol,
-    },
-    counter: parseInt(counter ?? '0', 10),
+  const rpcRunOperationParam: RPCRunOperationParam = {
+    operation: appliedParams[0],
+    chain_id,
   };
-  console.log('Test operation:', JSON.stringify(preparedOperation, null, 2));
 
-  const batchOp: PreparedOperation = await Tezos().prepare.batch(partialParams);
-  console.log('Control operation:', JSON.stringify(batchOp, null, 2));
+  let operationFee: number = 0;
+  let burnFee: number = 0;
 
-  const params: ForgeParams = Tezos().prepare.toForge(batchOp);
-  return params;
+  const appliedResponse: PreapplyResponse = await tezos.rpc.runOperation(rpcRunOperationParam);
+  appliedResponse.contents = appliedResponse.contents.map((content: OperationContentsAndResult) => {
+    assert(content.kind === OpKind.TRANSACTION, `Unexpected operation kind: ${content.kind}`);
+
+    const gasLimit: number = parseInt(content.metadata.operation_result.consumed_milligas ?? '0', 10);
+    let storageLimit: number = parseInt(content.metadata.operation_result.storage_size ?? '0', 10);
+    storageLimit += content.metadata.operation_result.allocated_destination_contract ? originationSize : 0;
+
+    operationFee += Math.ceil(MINIMAL_FEE_PER_GAS_MUTEZ * gasLimit);
+    burnFee += Math.ceil(storageLimit * costPerByte);
+
+    content.gas_limit = gasLimit.toString();
+    content.storage_limit = storageLimit.toString();
+
+    return content;
+  });
+
+  const opSize: number = Buffer.from(forgedBytes, 'hex').length;
+  operationFee += Math.ceil(costPerByte * opSize);
+
+  const minimalFee: number = operationFee + MINIMAL_FEE_MUTEZ;
+  const totalCost: number = minimalFee + burnFee;
+
+  console.log(`Estimated operation fee: ${operationFee} mutez`);
+  console.log(`Estimated minimal fee: ${minimalFee} mutez`);
+  console.log(`Estimated burn fee: ${burnFee} mutez`);
+  console.log(`Estimated total cost: ${totalCost} mutez`);
+
+  // const forgedParams2: ForgeParams = tezos.prepare.toForge(batchOp);
+  // const forgedBytes2: string = await Forger.forge(forgedParams);
 }
