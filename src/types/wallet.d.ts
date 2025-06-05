@@ -1,8 +1,8 @@
-type OmniWallet = {
-  price: number;
+type OracleData = {
+  tezosPrice: number;
 };
 
-type MetaWallet = {
+type WalletData = {
   address: string;
   balance: number;
   domain?: string;

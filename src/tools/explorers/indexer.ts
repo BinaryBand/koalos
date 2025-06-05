@@ -66,8 +66,8 @@ async function main(): Promise<void> {
     });
     console.log(`Created folder: ${outputFolder}`);
 
-    let curr: string = 'BL2XLarYPgwYANYRzqpLtypEJA1YvFA1CsCeLtuPeuq9kDYz1PZ';
-    for (let i: number = 0; i < 8640; i++) {
+    let curr = 'BL2XLarYPgwYANYRzqpLtypEJA1YvFA1CsCeLtuPeuq9kDYz1PZ';
+    for (let i = 0; i < 8640; i++) {
       const randomProvider: TezosToolkit = [Tezos1, Tezos2, Tezos3][Math.floor(Math.random() * 3)];
       const block: BlockResponse = await randomProvider.rpc.getBlock({ block: curr });
       const filename = `block_${block.header.level}`; // Use block level for filename

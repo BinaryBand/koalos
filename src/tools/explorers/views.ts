@@ -3,7 +3,7 @@ import { MichelsonStorageView } from '@taquito/tzip16';
 import { unwrapMichelsonMap } from '../michelson/michelson-map.js';
 import Tezos from 'src/network/taquito.js';
 
-export async function getTokenMetadataFromView(contract: FA, metadata: TZip17Metadata, tokenId: number = 0) {
+export async function getTokenMetadataFromView(contract: FA, metadata: TZip17Metadata, tokenId = 0) {
   const metadataImplementations: OffChainStorageView[] =
     metadata.views?.find(view => view.name === 'token_metadata')?.implementations ?? [];
 

@@ -1,36 +1,8 @@
-import { UnitValue } from '@taquito/taquito';
 import { ExecutionContextParams } from '@taquito/taquito/dist/types/contract/contract-methods/contract-on-chain-view.js';
+import { UnitValue } from '@taquito/taquito';
 import Tezos from '../../../network/taquito.js';
 
 const QUIPUSWAP: string = 'KT1J8Hr3BP8bpbfmgGpRPoC9nAMSYtStZG43';
-
-// type FA12Token = {
-//   fa12: string;
-// };
-
-// type FA2Token = {
-//   fa2: {
-//     token: string;
-//     id: number;
-//   };
-// };
-
-// type QuipuswapStorage = {
-//   storage: {
-//     tokens: {
-//       [key: number]: FA12Token | FA2Token;
-//     };
-//     token_to_id: {
-//       [key: string]: { key: string; value: number };
-//     };
-//     pairs: {
-//       [key: number]: {
-//         token_a: number;
-//         token_b: number;
-//       };
-//     };
-//   };
-// };
 
 export async function getTezosToUsdt(): Promise<number> {
   const executionContext: ExecutionContextParams = { viewCaller: QUIPUSWAP };

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { assert } from '../tools/misc.js';
 
-var SQLite: Database<sqlite3.Database, sqlite3.Statement> | undefined = undefined;
+let SQLite: Database<sqlite3.Database, sqlite3.Statement> | undefined = undefined;
 
 const __filename: string = fileURLToPath(import.meta.url);
 const __dirname: string = dirname(__filename);

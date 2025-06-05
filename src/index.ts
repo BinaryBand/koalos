@@ -1,21 +1,18 @@
-'use strict';
+import 'dotenv/config';
 
-import { Estimate, PreparedOperation } from '@taquito/taquito';
+import { b58cdecode, prefix } from '@taquito/utils';
+import { ForgeParams } from '@taquito/taquito';
+import { ed25519 } from '@noble/curves/ed25519';
 import BigNumber from 'bignumber.js';
 
-import { ForgeParams, LocalForger } from '@taquito/local-forging';
-
-import {
-  getTokenBalance,
-  getTokenSupply,
-  estimateTokenTransfers,
-  sendTokens,
-} from './tools/smart-contracts/tokens/tokens.js';
-import { BatchWalletOperation } from '@taquito/taquito/dist/types/wallet/batch-operation.js';
-import { getMetadata, getTokenMetadata } from './tools/smart-contracts/tokens/metadata.js';
-import { getOmniWallet, getMetaWallet, sendTezos } from './tools/wallet.js';
 import { initHelia, stopHelia } from './network/helia.js';
 import { initDatabase } from './network/cache.js';
+
+import { getTokenBalance, getTokenSupply, createTokenTransaction } from './tools/smart-contracts/tokens/tokens.js';
+import { getMetadata, getTokenMetadata } from './tools/smart-contracts/tokens/metadata.js';
+import { forgeOperation, sendForgedTransaction } from './tools/chain/transactions.js';
+import { createTransaction, getWalletData } from './tools/wallet.js';
+import { getOracleData } from './tools/chain/oracle.js';
 import Tezos from './network/taquito.js';
 
 const FA: Record<string, [string, number]> = {
@@ -35,98 +32,124 @@ const FA: Record<string, [string, number]> = {
   plenty: ['KT1GRSvLoikDsXujKgZPsGLX8k8VvR2Tq95b', 0],
 };
 
+// /******************************
+//  * DO NOT USE IN PRODUCTION!
+//  ******************************/
+function sign(operationHash: string): string {
+  const bytes: Uint8Array = Buffer.from(operationHash, 'hex');
+
+  const secretKey: string = process.env.SECRET_KEY!;
+  const sk: Uint8Array = b58cdecode(secretKey, prefix.edsk).subarray(0, 32);
+
+  const sig: Uint8Array = ed25519.sign(bytes, sk);
+  return Buffer.from(sig).toString('hex');
+}
+
 async function main(): Promise<void> {
-  // await initDatabase();
-  // await initHelia();
+  await initDatabase();
+  await initHelia();
 
-  // console.log('Tezos:', (await getOmniWallet()).price.toPrecision(2), '$');
+  const { tezosPrice } = await getOracleData();
+  console.log('Tezos price:', tezosPrice, '$');
 
-  const address: string = 'tz1TEGKFN9pUpLPvLZXgGjuVoWaebfJS9tuh';
-  // const wallet: MetaWallet = await getMetaWallet(address);
-  // console.log('User address:', address);
-  // console.log('Balance:', wallet.balance, 'ꜩ');
-  // console.log('Domain:', wallet.domain);
+  const address = 'tz1TEGKFN9pUpLPvLZXgGjuVoWaebfJS9tuh';
+  const wallet: WalletData = await getWalletData(address);
+  console.log('User address:', address);
+  console.log('Balance:', wallet.balance, 'ꜩ');
+  console.log('Domain:', wallet.domain);
 
-  // const estimates: Estimate[] = await estimateTransfers(address, [
-  //   { to: address, amount: new BigNumber(0.000001) },
-  //   { to: address, amount: new BigNumber(0.000001) },
-  //   { to: address, amount: new BigNumber(0.000001) },
-  // ]);
-  // console.log('Estimates for transfers:', estimates);
+  // Test native Tezos transactions
+  const skipNativeTransaction: boolean = true;
+  if (!skipNativeTransaction) {
+    const preparedParams: ForgeParams = await createTransaction(address, [
+      { to: address, amount: new BigNumber(0.000001) },
+      { to: address, amount: new BigNumber(0.000001) },
+      { to: address, amount: new BigNumber(0.000001) },
+    ]);
 
-  const operation: ForgeParams = await sendTezos(address, [
-    { to: address, amount: new BigNumber(0.000001) },
-    { to: address, amount: new BigNumber(0.000001) },
-    { to: address, amount: new BigNumber(0.000001) },
-  ]);
-  console.log(operation);
+    const [payload, signHere] = await forgeOperation(preparedParams);
+    console.log('Operation payload:', payload.slice(0, 12), '...');
+    console.log('Sign here:', signHere.slice(0, 12), '...');
 
-  // const forger: LocalForger = new LocalForger();
-  // const forgedBytes: string = await forger.forge(operation);
-  // console.log('Operation prepared:', forgedBytes);
+    const signedBytes: string = sign(signHere);
+    console.log('Signed bytes:', signedBytes.slice(0, 12), '...');
 
-  // // Contracts
-  // const fa12: FA12 = await Tezos().contract.at<FA12>(FA.swc[0]);
+    const opHash: string = await sendForgedTransaction(payload, signedBytes);
+    console.log('Operation hash:', opHash);
+  }
 
-  // const fa12Metadata: TZip17Metadata | undefined = await getMetadata(fa12);
-  // console.log('FA1.2 metadata:', fa12Metadata);
+  /***************************************
+   * Test FA1.2 Tezos token
+   ***************************************/
+  const fa12: FA12 = await Tezos().contract.at<FA12>(FA.swc[0]);
+  const fa12Metadata: TZip17Metadata | undefined = await getMetadata(fa12);
+  const fa12TokenMetadata: TZip21TokenMetadata | undefined = await getTokenMetadata(fa12);
 
-  // const fa12TokenMetadata: TZip21TokenMetadata | undefined = await getTokenMetadata(fa12);
-  // console.log('FA1.2 token metadata:', fa12TokenMetadata);
+  const [fa12Name, fa12Decimals, fa12Symbol]: [string, number, string?] = [
+    fa12TokenMetadata?.name || fa12Metadata?.name || '',
+    fa12TokenMetadata?.decimals ? parseInt(fa12TokenMetadata.decimals, 10) : 0,
+    fa12TokenMetadata?.symbol,
+  ];
 
-  // const [fa12Name, fa12Decimals, fa12Symbol]: [string, number, string?] = [
-  //   fa12TokenMetadata?.name || fa12Metadata?.name || '',
-  //   fa12TokenMetadata?.decimals ? parseInt(fa12TokenMetadata.decimals, 10) : 0,
-  //   fa12TokenMetadata?.symbol,
-  // ];
+  const fa12Factor: number = Math.pow(10, fa12Decimals);
+  console.log(`${fa12Name} balance:`, (await getTokenBalance(fa12, address)).toNumber() / fa12Factor, fa12Symbol);
+  console.log(`${fa12Name} supply:`, (await getTokenSupply(fa12)).toNumber() / fa12Factor, fa12Symbol);
 
-  // const factor: number = Math.pow(10, fa12Decimals);
-  // console.log(`${fa12Name} balance:`, (await getTokenBalance(fa12, address)).toNumber() / factor, fa12Symbol);
-  // console.log(`${fa12Name} supply:`, (await getTokenSupply(fa12)).toNumber() / factor, fa12Symbol);
+  // Test Tezos FA1.2 token transactions
+  const skipFa12TokenTransaction: boolean = true;
+  if (!skipFa12TokenTransaction) {
+    const preparedParams: ForgeParams = await createTokenTransaction(fa12, address, [
+      { to: address, amount: new BigNumber(1) },
+      { to: address, amount: new BigNumber(1) },
+      { to: address, amount: new BigNumber(1) },
+    ]);
 
-  // const fa12Estimations: Estimate[] = await estimateTokenTransfers(fa12, address, [
-  //   { to: address, amount: new BigNumber(1) },
-  //   { to: address, amount: new BigNumber(1) },
-  //   { to: address, amount: new BigNumber(1) },
-  // ]);
-  // console.log('FA12 estimations:', fa12Estimations);
+    const [payload, signHere] = await forgeOperation(preparedParams);
+    console.log('Operation payload:', payload.slice(0, 12), '...');
+    console.log('Sign here:', signHere.slice(0, 12), '...');
 
-  // const fa12Operation: BatchWalletOperation = await sendTokens(fa12, address, [
-  //   { to: address, amount: new BigNumber(1) },
-  //   { to: address, amount: new BigNumber(1) },
-  //   { to: address, amount: new BigNumber(1) },
-  // ]);
+    const signedBytes: string = sign(signHere);
+    console.log('Signed bytes:', signedBytes.slice(0, 12), '...');
 
-  // // FA2 contract
-  // const fa2: FA2 = await Tezos().contract.at<FA2>(FA.plenty[0]);
+    const opHash: string = await sendForgedTransaction(payload, signedBytes);
+    console.log('Operation hash:', opHash);
+  }
 
-  // const fa2Metadata: TZip17Metadata | undefined = await getMetadata(fa2);
-  // console.log('FA2 metadata:', fa2Metadata);
+  /***************************************
+   * Test FA2 Tezos token
+   ***************************************/
+  const fa2: FA2 = await Tezos().contract.at<FA2>(FA.plenty[0]);
+  const fa2Metadata: TZip17Metadata | undefined = await getMetadata(fa2);
+  const fa2TokenMetadata: TZip21TokenMetadata | undefined = await getTokenMetadata(fa2);
 
-  // const fa2TokenMetadata: TZip21TokenMetadata | undefined = await getTokenMetadata(fa2);
-  // console.log('FA2 token metadata:', fa2TokenMetadata);
+  const [fa2Name, fa2Decimals, fa2Symbol]: [string, number, string?] = [
+    fa2TokenMetadata?.name || fa2Metadata?.name || '',
+    fa2TokenMetadata?.decimals ? parseInt(fa2TokenMetadata.decimals, 10) : 0,
+    fa2TokenMetadata?.symbol,
+  ];
 
-  // const [fa2Name, fa2Decimals, fa2Symbol]: [string, number, string?] = [
-  //   fa2TokenMetadata?.name || fa2Metadata?.name || '',
-  //   fa2TokenMetadata?.decimals ? parseInt(fa2TokenMetadata.decimals, 10) : 0,
-  //   fa2TokenMetadata?.symbol,
-  // ];
+  const fa2Factor: number = Math.pow(10, fa2Decimals);
+  console.log(`${fa2Name} balance:`, (await getTokenBalance(fa2, address)).toNumber() / fa2Factor, fa2Symbol);
 
-  // const factor2: number = Math.pow(10, fa2Decimals);
-  // console.log(`${fa2Name} balance:`, (await getTokenBalance(fa2, address)).toNumber() / factor2, fa2Symbol);
+  // Test Tezos FA2 token transactions
+  const skipFa2TokenTransaction: boolean = true;
+  if (!skipFa2TokenTransaction) {
+    const preparedParams: ForgeParams = await createTokenTransaction(fa12, address, [
+      { to: address, amount: new BigNumber(1), tokenId: FA.plenty[1] },
+      { to: address, amount: new BigNumber(1), tokenId: FA.plenty[1] },
+      { to: address, amount: new BigNumber(1), tokenId: FA.plenty[1] },
+    ]);
 
-  // const fa2Estimations = await estimateTokenTransfers(fa2, address, [
-  //   { to: address, amount: new BigNumber(1) },
-  //   { to: address, amount: new BigNumber(1) },
-  //   { to: address, amount: new BigNumber(1) },
-  // ]);
-  // console.log('FA2 estimations:', fa2Estimations);
+    const [payload, signHere] = await forgeOperation(preparedParams);
+    console.log('Operation payload:', payload.slice(0, 12), '...');
+    console.log('Sign here:', signHere.slice(0, 12), '...');
 
-  // const fa2Operation: BatchWalletOperation = await sendTokens(fa2, address, [
-  //   { to: address, amount: new BigNumber(1) },
-  //   { to: address, amount: new BigNumber(1) },
-  //   { to: address, amount: new BigNumber(1) },
-  // ]);
+    const signedBytes: string = sign(signHere);
+    console.log('Signed bytes:', signedBytes.slice(0, 12), '...');
+
+    const opHash: string = await sendForgedTransaction(payload, signedBytes);
+    console.log('Operation hash:', opHash);
+  }
 }
 
 main()
@@ -137,5 +160,5 @@ main()
   .catch(error => {
     console.error('Error:', error);
     process.exit(1);
-  });
-// .finally(stopHelia);
+  })
+  .finally(stopHelia);

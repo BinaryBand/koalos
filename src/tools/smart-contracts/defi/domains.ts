@@ -35,7 +35,7 @@ type DomainStorage = {
   };
 };
 
-const DOMAIN_CONTRACT: string = 'KT1GBZmSxmnKJXGMdMLbugPfLyUPmuLSMwKS';
+const DOMAIN_CONTRACT = 'KT1GBZmSxmnKJXGMdMLbugPfLyUPmuLSMwKS';
 
 function addressToExpr(address: string): string {
   const data: MichelsonData = { string: address };

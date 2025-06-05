@@ -1,15 +1,7 @@
-import {
-  ContractMethodObject,
-  ContractProvider,
-  Estimate,
-  OpKind,
-  ParamsWithKind,
-  TransferParams,
-  UnitValue,
-  WalletOperationBatch,
-  WalletParamsWithKind,
-} from '@taquito/taquito';
-import { BatchWalletOperation } from '@taquito/taquito/dist/types/wallet/batch-operation.js';
+import { ForgeParams, OpKind, ParamsWithKind, TransferParams, UnitValue } from '@taquito/taquito';
+import { OperationContents } from '@taquito/rpc';
+
+import { applyEstimates } from '../../chain/transactions.js';
 import { assert } from '../../../tools/misc.js';
 import Tezos from '../../../network/taquito.js';
 
@@ -33,7 +25,7 @@ function isFA2(token: FA): token is FA2 {
  * @returns A promise that resolves to the balance as a `BigNumber`.
  * @throws If the token does not support a balance view.
  */
-export async function getTokenBalance(token: FA, address: string, tokenId: number = 0): Promise<BigNumber> {
+export async function getTokenBalance(token: FA, address: string, tokenId = 0): Promise<BigNumber> {
   if (isFA12(token)) {
     return token.views.getBalance(address).read();
   }
@@ -59,17 +51,13 @@ export async function getTokenSupply(token: FA12): Promise<BigNumber> {
 
 async function prepareTokenTransfers(token: FA, from: string, recipients: TokenRecipient[]): Promise<TransferParams[]> {
   if (isFA12(token)) {
-    const transactions: TransferParams[] = recipients
+    return recipients
       .map(({ to, amount }) => token.methodsObject.transfer({ from, to, value: amount }))
-      .map((tx: ContractMethodObject<ContractProvider>): TransferParams => tx.toTransferParams());
-
-    return transactions;
+      .map((tx): TransferParams => tx.toTransferParams());
   }
 
   if (isFA2(token)) {
-    const payload: Txs[] = recipients.map(({ to, amount, tokenId }) => {
-      return { to_: to, token_id: tokenId ?? 0, amount };
-    });
+    const payload: Txs[] = recipients.map(({ to, amount, tokenId }) => ({ to_: to, token_id: tokenId ?? 0, amount }));
 
     const transactions: TransferParams = token.methodsObject
       .transfer([{ from_: from, txs: payload }])
@@ -82,39 +70,25 @@ async function prepareTokenTransfers(token: FA, from: string, recipients: TokenR
 }
 
 /**
- * Estimates the gas and storage costs for a batch of token transfer operations.
+ * Creates a token transaction operation for a given FA token.
  *
- * @param token - The FA (fungible asset) token contract instance to use for transfers.
- * @param from - The address initiating the transfers.
- * @param recipients - An array of recipient addresses and amounts for the transfers.
- * @returns A promise that resolves to an array of `Estimate` objects, each representing the estimated cost for a corresponding transfer.
+ * Prepares transfer parameters for the specified recipients, applies fee/gas/storage estimates,
+ * and returns the operation contents along with the current branch hash.
  *
- * @throws Will throw if preparing the token transfers or estimating the batch fails.
+ * @param token - The FA token instance to use for the transaction.
+ * @param source - The address initiating the transaction.
+ * @param recipients - An array of recipient objects specifying destination addresses and amounts.
+ * @returns A promise that resolves to the forge parameters containing the operation contents and branch hash.
  */
-export async function estimateTokenTransfers(
+export async function createTokenTransaction(
   token: FA,
-  from: string,
+  source: string,
   recipients: TokenRecipient[]
-): Promise<Estimate[]> {
-  const transactions: TransferParams[] = await prepareTokenTransfers(token, from, recipients);
-  const batchParams: ParamsWithKind[] = transactions.map(tx => ({ ...tx, kind: OpKind.TRANSACTION }));
-  const estimates: Estimate[] = await Tezos().estimate.batch(batchParams);
-  return estimates;
-}
+): Promise<ForgeParams> {
+  const transactions: TransferParams[] = await prepareTokenTransfers(token, source, recipients);
+  const partialParams: ParamsWithKind[] = transactions.map(tx => ({ ...tx, kind: OpKind.TRANSACTION }));
+  const contents: OperationContents[] = await applyEstimates(source, partialParams);
 
-/**
- * Sends tokens from a specified address to multiple recipients using a batch operation.
- *
- * @param token - The FA (fungible asset) token contract instance to use for transfers.
- * @param from - The address from which tokens will be sent.
- * @param recipients - An array of recipient addresses and amounts to receive tokens.
- * @returns A promise that resolves to a `BatchWalletOperation` representing the sent batch transaction.
- *
- * @throws Will throw if preparing token transfers or sending the batch fails.
- */
-export async function sendTokens(token: FA, from: string, recipients: TokenRecipient[]): Promise<BatchWalletOperation> {
-  const transactions: TransferParams[] = await prepareTokenTransfers(token, from, recipients);
-  const batchParams: WalletParamsWithKind[] = transactions.map(tx => ({ ...tx, kind: OpKind.TRANSACTION }));
-  const batch: WalletOperationBatch = Tezos().wallet.batch(batchParams);
-  return batch.send();
+  const branch: string = await Tezos().rpc.getBlockHash();
+  return { contents, branch };
 }

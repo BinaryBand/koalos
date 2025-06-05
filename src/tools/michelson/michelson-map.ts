@@ -55,7 +55,7 @@ export async function unwrapMichelsonMap<O extends Record<string, unknown>>(
 
     // Remove the link after unwrapping and merge metadata into root
     if (typeof metadata === 'object' && metadata !== null) {
-      map = { ...map, ...metadata } as O;
+      map = { ...map, ...metadata };
       delete map[''];
     }
   }

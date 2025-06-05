@@ -53,7 +53,7 @@ export async function getMetadata(contract: ContractAbstraction): Promise<TZip17
  */
 export async function getTokenMetadata(
   contract: ContractAbstraction,
-  tokenId: number = 0
+  tokenId = 0
 ): Promise<TZip21TokenMetadata | undefined> {
   const storage: TZip16Storage = await contract.storage();
 
