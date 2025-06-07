@@ -1,1 +1,1 @@
-type String = string;
+type MichelsonExpression = import('@taquito/rpc').MichelsonV1Expression;

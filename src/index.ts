@@ -1,10 +1,6 @@
 import 'dotenv/config';
-import { greet } from '@utils/greeter';
 
 import { blake2b } from '@noble/hashes/blake2';
-
-const message: String = greet('World');
-console.log(message);
 
 console.log('Environment Variables:');
 console.log('-----------------------');

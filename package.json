@@ -1,5 +1,5 @@
 {
-  "name": "template-typescript",
+  "name": "koalos-wallet",
   "version": "0.0.0-development",
   "description": "",
   "license": "MIT",
@@ -11,13 +11,12 @@
     "build": "npx rollup -c",
     "test": "npx jest --runInBand",
     "typecheck": "tsc --noEmit",
-    "docs": "npx typedoc --out docs ./src/**/*.ts"
+    "docs": "npx typedoc --out docs ./src/**/*.ts --name \"Koalos Wallet\""
   },
   "devDependencies": {
     "@babel/core": "^7.27.4",
     "@babel/preset-env": "^7.27.2",
     "@babel/types": "^7.27.6",
-    "@rollup/plugin-alias": "^5.1.1",
     "@rollup/plugin-commonjs": "^28.0.3",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.1",
@@ -31,6 +30,9 @@
     "typedoc": "^0.28.5"
   },
   "dependencies": {
-    "@noble/hashes": "^1.8.0"
+    "@noble/hashes": "^1.8.0",
+    "@taquito/rpc": "^22.0.0",
+    "@taquito/taquito": "^22.0.0",
+    "bignumber.js": "^9.3.0"
   }
 }
