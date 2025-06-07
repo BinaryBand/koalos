@@ -22,8 +22,8 @@ export async function getTezosToKusd(): Promise<number> {
 
   const ratio: BigNumber = await quipuswap.contractViews['get_swap_min_res']({
     swaps: [{ direction: { b_to_a: UnitValue }, pair_id: 1 }],
-    amount_in: 1e4,
+    amount_in: 1e10,
   }).executeView(executionContext);
 
-  return ratio.toNumber() / 1e16; // Convert to XTZ price in KUSD
+  return ratio.toNumber() / 1e10; // Convert to XTZ price in KUSD
 }

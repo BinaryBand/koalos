@@ -1,14 +1,10 @@
 import path from 'path';
 import sqlite3 from 'sqlite3';
 import { Database, open } from 'sqlite';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import { assert } from '../tools/misc.js';
 
 let SQLite: Database<sqlite3.Database, sqlite3.Statement> | undefined = undefined;
 
-const __filename: string = fileURLToPath(import.meta.url);
-const __dirname: string = dirname(__filename);
 const dbPath: string = path.join(__dirname, 'database.db');
 
 async function createTableIfNotExists(): Promise<void> {

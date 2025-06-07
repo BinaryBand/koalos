@@ -8,8 +8,8 @@ import { assert } from '../tools/misc.js';
 
 const RPC_URLS: string[] = [
   'https://mainnet.tezos.ecadinfra.com/',
-  // 'https://rpc.tzbeta.net/',
   'https://mainnet.smartpy.io/',
+  // 'https://rpc.tzbeta.net/',
   // 'https://rpc.tzkt.io/mainnet/',
 ];
 

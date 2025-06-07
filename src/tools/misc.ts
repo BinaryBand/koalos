@@ -6,6 +6,11 @@ export function assert(condition: unknown, message?: string): asserts condition 
   }
 }
 
+export function convertToReadableBalance(rawBalance: number | BigNumber, decimals?: number): number {
+  const decimalFactor: number = Math.pow(10, decimals ?? 0);
+  return (rawBalance instanceof BigNumber ? rawBalance.toNumber() : rawBalance) / decimalFactor;
+}
+
 export function isJson(item: unknown): item is Record<string, unknown> {
   let value: string = typeof item !== 'string' ? JSON.stringify(item) : item;
   try {
@@ -17,7 +22,6 @@ export function isJson(item: unknown): item is Record<string, unknown> {
   return Boolean(value);
 }
 
-export function convertToReadableBalance(rawBalance: number | BigNumber, decimals?: number): number {
-  const decimalFactor: number = Math.pow(10, decimals ?? 0);
-  return (rawBalance instanceof BigNumber ? rawBalance.toNumber() : rawBalance) / decimalFactor;
+export function isNotUndefined(value: unknown): value is NonNullable<unknown> {
+  return value !== undefined && value !== null && value !== false;
 }

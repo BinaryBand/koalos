@@ -32,3 +32,11 @@ interface OperationSignature {
   prefixSig: string;
   sbytes: string;
 }
+
+type OperationMetadata = {
+  balance_updates?: BalanceUpdates[];
+  operation_result?: import('@taquito/rpc').OperationResult;
+  internal_operation_results?: import('@taquito/rpc').InternalOperationResult[];
+};
+
+type BalanceUpdates = import('@taquito/rpc').OperationMetadataBalanceUpdates;

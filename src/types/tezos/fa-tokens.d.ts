@@ -23,22 +23,3 @@ type TokenData = {
 };
 
 type TokenRecipient = TezosRecipient & { tokenId?: number };
-
-// interface ITokenData {
-//   id: number;
-//   contract: TzAddress;
-//   tokenId?: string;
-//   standard: Standard;
-//   firstMinter: TzAddress;
-//   firstLevel: number;
-//   firstTime: string;
-//   lastLevel: number;
-//   lastTime: string;
-//   transfersCount: number;
-//   balancesCount: number;
-//   holdersCount: number;
-//   totalMinted: string;
-//   totalBurned: string;
-//   totalSupply: string;
-//   metadata?: BaseTokenMetadata;
-// }

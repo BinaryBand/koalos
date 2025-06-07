@@ -5,14 +5,12 @@ import { ForgeParams } from '@taquito/taquito';
 import { ed25519 } from '@noble/curves/ed25519';
 import BigNumber from 'bignumber.js';
 
-import { initHelia, stopHelia } from './network/helia.js';
-import { initDatabase } from './network/cache.js';
-
 import { getTokenBalance, getTokenSupply, createTokenTransaction } from './tools/smart-contracts/tokens/tokens.js';
 import { getMetadata, getTokenMetadata } from './tools/smart-contracts/tokens/metadata.js';
 import { forgeOperation, sendForgedTransaction } from './tools/chain/transactions.js';
 import { createTransaction, getWalletData } from './tools/wallet.js';
-import { getOracleData } from './tools/chain/oracle.js';
+import { getTezosData } from './tools/chain/oracle.js';
+import { initDatabase } from './network/cache.js';
 import Tezos from './network/taquito.js';
 
 const FA: Record<string, [string, number]> = {
@@ -47,9 +45,8 @@ function sign(operationHash: string): string {
 
 async function main(): Promise<void> {
   await initDatabase();
-  await initHelia();
 
-  const { tezosPrice } = await getOracleData();
+  const { tezosPrice } = await getTezosData();
   console.log('Tezos price:', tezosPrice, '$');
 
   const address = 'tz1TEGKFN9pUpLPvLZXgGjuVoWaebfJS9tuh';
@@ -59,7 +56,7 @@ async function main(): Promise<void> {
   console.log('Domain:', wallet.domain);
 
   // Test native Tezos transactions
-  const skipNativeTransaction: boolean = true;
+  const skipNativeTransaction: boolean = false;
   if (!skipNativeTransaction) {
     const preparedParams: ForgeParams = await createTransaction(address, [
       { to: address, amount: new BigNumber(0.000001) },
@@ -96,7 +93,7 @@ async function main(): Promise<void> {
   console.log(`${fa12Name} supply:`, (await getTokenSupply(fa12)).toNumber() / fa12Factor, fa12Symbol);
 
   // Test Tezos FA1.2 token transactions
-  const skipFa12TokenTransaction: boolean = true;
+  const skipFa12TokenTransaction: boolean = false;
   if (!skipFa12TokenTransaction) {
     const preparedParams: ForgeParams = await createTokenTransaction(fa12, address, [
       { to: address, amount: new BigNumber(1) },
@@ -132,7 +129,7 @@ async function main(): Promise<void> {
   console.log(`${fa2Name} balance:`, (await getTokenBalance(fa2, address)).toNumber() / fa2Factor, fa2Symbol);
 
   // Test Tezos FA2 token transactions
-  const skipFa2TokenTransaction: boolean = true;
+  const skipFa2TokenTransaction: boolean = false;
   if (!skipFa2TokenTransaction) {
     const preparedParams: ForgeParams = await createTokenTransaction(fa12, address, [
       { to: address, amount: new BigNumber(1), tokenId: FA.plenty[1] },
@@ -160,5 +157,4 @@ main()
   .catch(error => {
     console.error('Error:', error);
     process.exit(1);
-  })
-  .finally(stopHelia);
+  });

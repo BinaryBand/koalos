@@ -1,19 +1,16 @@
 {
-  "name": "typescript-npm-package-template",
+  "name": "xtz_wallet",
   "version": "0.0.0-development",
-  "description": "A template for creating npm packages using TypeScript and VSCode",
+  "description": "An experimental Tezos wallet implementation in TypeScript that relies solely on RPC calls to get chain data.",
   "main": "./dist/index.js",
-  "type": "module",
   "scripts": {
     "start": "tsc && node .",
     "test": "jest",
-    "lint": "eslint ./src/ --fix",
-    "typecheck": "tsc --noEmit",
-    "jsdoc": "jsdoc -a all -c jsdoc.json -r -R README.md dist/index.js -d docs/jsdoc && jsdoc2md --files index.js > docs/API.md"
+    "typecheck": "tsc --noEmit"
   },
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/BinaryBand/koalos"
   },
   "license": "MIT",
   "author": {
@@ -21,46 +18,31 @@
     "email": "binaryband@users.noreply.github.com",
     "url": "https://github.com/binaryband"
   },
-  "engines": {
-    "node": ">=12.0"
-  },
   "keywords": [
-    "crypto"
+    "crypto",
+    "tezos",
+    "wallet",
+    "typescript"
   ],
   "devDependencies": {
     "@babel/helper-compilation-targets": "^7.27.2",
     "@types/bignumber.js": "^4.0.3",
     "@types/elliptic": "^6.4.18",
+    "@types/mssql": "^9.1.7",
     "@types/node": "^22.15.23",
     "@types/sqlite3": "^3.1.11",
-    "@typescript-eslint/eslint-plugin": "^4.22.0",
-    "@typescript-eslint/parser": "^4.22.0",
-    "docdash": "^2.0.2",
-    "eslint": "^7.25.0",
-    "eslint-config-prettier": "^8.3.0",
-    "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-prettier": "^3.4.0",
-    "jsdoc": "^4.0.4",
-    "jsdoc-to-markdown": "^9.1.1",
-    "lint-staged": "^13.2.1",
-    "prettier": "^2.2.1",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.2.1",
     "typescript": "^5.8.3"
   },
-  "lint-staged": {
-    "*.ts": "eslint --cache --cache-location .eslintcache --fix"
-  },
   "dependencies": {
-    "@helia/unixfs": "^5.0.3",
     "@noble/curves": "^1.9.1",
     "@noble/hashes": "^1.8.0",
     "@taquito/signer": "^22.0.0",
     "@taquito/taquito": "^22.0.0",
-    "@taquito/tzip12": "^22.0.0",
     "bignumber.js": "^9.3.0",
     "dotenv": "^16.5.0",
-    "helia": "^5.4.2",
+    "mssql": "^11.0.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
   }
