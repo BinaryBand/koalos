@@ -1,4 +1,5 @@
 import { isIpfsLink } from '@/network/ipfs';
+import { isTezosLink } from '@/network/tezos-storage';
 
 describe('uri tests', () => {
   it('check for valid ipfs links', () => {
@@ -11,5 +12,11 @@ describe('uri tests', () => {
     expect(isIpfsLink('ipfs://bafybeiaysi4s6lnjev27ln5icwm6tueaw2vdykrtjkwiphwekaywqhcjze')).toBe(true);
   });
 
-  it('check for valid tezos links', () => {});
+  it('check for valid tezos links', () => {
+    expect(isTezosLink('tezos-storage:token-data')).toBe(true);
+    expect(isTezosLink('tezos-storage://KT1K9gCRgaLRFKTErYt1wVxA3Frb9FjasjTV')).toBe(true);
+    expect(isTezosLink('tezos-storage://KT1JkoE42rrMBP9b2oDhbx6EUr26GcySZMUH/token-data')).toBe(true);
+    expect(isTezosLink('tezos-storage://KT1PWx2mnDueood7fEmfbBDKx1D9BAnnXitn/token%2data')).toBe(true);
+    expect(isTezosLink('tezos:KT19jW4iyZYrU3AGXqhV33Aa73yGWuFe1b2g')).toBe(false);
+  });
 });
