@@ -1,11 +1,23 @@
 import 'dotenv/config';
 
-import { blake2b } from '@noble/hashes/blake2';
+import { ContractAbstraction, ContractProvider, TezosToolkit } from '@taquito/taquito';
+import Tezos from '@/tezos/provider';
 
-console.log('Environment Variables:');
-console.log('-----------------------');
-console.log(`NODE_ENV: ${process.env['SUPER_SECRETIVE_SECRET']}`);
+async function main() {
+  const tezos: TezosToolkit = Tezos();
 
-const hash: string = Buffer.from(blake2b('Hello, World!', { dkLen: 32 })).toString('hex');
+  const address: string = process.env['VIEW_ADDRESS']!;
+  console.log(`Tezos address: ${address}`);
+  console.log('Balance:', await tezos.rpc.getBalance(address));
+  console.log('Delegate:', await tezos.rpc.getDelegate(address));
+}
 
-console.log('Hash:', hash);
+main()
+  .then(async () => {
+    console.log('Done');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('Error:', error);
+    process.exit(1);
+  });
