@@ -1,29 +1,45 @@
 import 'dotenv/config';
 
-import { TezosToolkit } from '@taquito/taquito';
-import Tezos from '@/tezos/provider';
-import { getMetadata, getTokenMetadata } from '@/tezos/metadata';
+import { b58cdecode, b58cencode, prefix } from '@taquito/utils';
+import { OperationContents } from '@taquito/rpc';
+import { ed25519 } from '@noble/curves/ed25519';
+
+import { forgeOperation, sendForgedTransaction } from '@/tezos/transaction';
+import { createTransaction } from '@/tezos/wallet';
+import BigNumber from 'bignumber.js';
+
+/******************************
+ * DO NOT USE IN PRODUCTION!
+ ******************************/
+function sign(operationHash: string): string {
+  const bytes: Uint8Array = Buffer.from(operationHash, 'hex');
+
+  const secretKey: string = process.env['SECRET_KEY']!;
+  const sk: Uint8Array = b58cdecode(secretKey, prefix.edsk).subarray(0, 32);
+
+  const sig: Uint8Array = ed25519.sign(bytes, sk);
+  return Buffer.from(sig).toString('hex');
+}
 
 async function main() {
-  const tezos: TezosToolkit = Tezos();
+  const address: string = process.env['ADDRESS']!;
+  const preparedParams: OperationContents[] = await createTransaction(address, [
+    { to: address, amount: new BigNumber(0.000001) },
+    { to: address, amount: new BigNumber(0.000001) },
+    { to: address, amount: new BigNumber(0.000001) },
+  ]);
+  console.log('Prepared transaction parameters:', preparedParams);
 
-  const address: string = 'tz1TEGKFN9pUpLPvLZXgGjuVoWaebfJS9tuh';
-  console.log(`Tezos address: ${address}`);
-  console.log('Balance:', await tezos.rpc.getBalance(address));
-  console.log('Delegate:', await tezos.rpc.getDelegate(address));
+  const [payloadHex, signHere] = await forgeOperation(preparedParams);
+  console.log('Forged operation bytes:', payloadHex.slice(0, 21), '...');
+  console.log('Sign this hash:', signHere);
 
-  const kusd: string = 'KT1K9gCRgaLRFKTErYt1wVxA3Frb9FjasjTV';
-  const kusdMetadata = await getMetadata(kusd);
-  console.log(kusdMetadata);
+  const signatureHex: string = sign(signHere);
+  const signature: string = b58cencode(signatureHex, prefix.sig);
+  console.log('Encoded signature:', signature);
 
-  // const swc: string = 'KT19jW4iyZYrU3AGXqhV33Aa73yGWuFe1b2g';
-  // const swcContract = await tezos.contract.at(swc);
-  // const swcTokenMetadata = await getTokenMetadata(swcContract);
-  // console.log(swcTokenMetadata);
-
-  const hdao: string = 'KT193D4vozYnhGJQVtw7CoxxqphqUEEwK6Vb';
-  const hdaoTokenMetadata = await getTokenMetadata(hdao, 0);
-  console.log(hdaoTokenMetadata);
+  const opHash: string = await sendForgedTransaction(payloadHex, signatureHex);
+  console.log('Operation hash:', opHash);
 }
 
 main()

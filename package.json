@@ -30,6 +30,7 @@
     "typedoc": "^0.28.5"
   },
   "dependencies": {
+    "@noble/curves": "^1.9.2",
     "@noble/hashes": "^1.8.0",
     "@taquito/rpc": "^22.0.0",
     "@taquito/signer": "^22.0.0",

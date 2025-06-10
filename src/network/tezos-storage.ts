@@ -1,10 +1,13 @@
 import { BigMapAbstraction, ContractAbstraction, ContractProvider } from '@taquito/taquito';
-import { MichelsonMap, Schema } from '@taquito/michelson-encoder';
+import { MichelsonMap, MichelsonMapKey } from '@taquito/michelson-encoder';
 
 import { tezosStorageUri } from '@public/constants/regex.json';
+import { unwrapMichelsonMap } from '@/tezos/michelson';
 import { assert } from '@/tools/utils';
 import Tezos from '@/tezos/provider';
-import { unwrapMichelsonMap } from '@/tezos/michelson';
+
+// --- Constants ---
+const TEZOS_STORAGE_REGEX: RegExp = new RegExp(tezosStorageUri);
 
 /**
  * Determines whether a given URI matches the Tezos storage URI pattern.
@@ -13,13 +16,33 @@ import { unwrapMichelsonMap } from '@/tezos/michelson';
  * @returns `true` if the URI matches the Tezos storage URI pattern; otherwise, `false`.
  */
 export function isTezosLink(uri: string): boolean {
-  return new RegExp(tezosStorageUri).test(uri);
+  return TEZOS_STORAGE_REGEX.test(uri);
 }
 
-// https://tzip.tezosagora.org/proposal/tzip-16/#the-tezos-storage-uri-scheme
-// TODO: Handle paths with multiple segments, e.g. "tezos-storage://tz1.../entrypoint/segment"
+async function findDataInStorage(data: { metadata?: unknown }, segments: string[]): Promise<unknown> {
+  const pathSegments: string[] = segments;
+
+  let curr: unknown = data['metadata'];
+  for (const segment of pathSegments) {
+    if (curr instanceof BigMapAbstraction) {
+      const michelsonMap: MichelsonMap<MichelsonMapKey, unknown> = await curr.getMultipleValues([segment]);
+      michelsonMap.setType(curr['schema'].val);
+      curr = (await unwrapMichelsonMap(michelsonMap))[segment];
+    } else if (MichelsonMap.isMichelsonMap(curr)) {
+      curr = curr.get(segment);
+    } else if (typeof curr === 'object' && curr !== null && segment in curr) {
+      curr = (curr as { [segment]: unknown })[segment];
+    } else {
+      throw new Error(`Invalid path segment '${segment}' in Tezos storage URI`);
+    }
+  }
+
+  return curr;
+}
+
 /**
  * Retrieves data from a Tezos smart contract's storage using a tezos-storage URI.
+ * https://tzip.tezosagora.org/proposal/tzip-16/#the-tezos-storage-uri-scheme
  *
  * This function parses the provided URI to extract the contract address and storage path,
  * fetches the contract's storage, and returns the requested data. If the storage contains
@@ -32,42 +55,17 @@ export function isTezosLink(uri: string): boolean {
  * @throws If the URI is invalid or a contract address cannot be determined.
  */
 export async function getFromTezos<T = unknown>(uri: string, defaultAddress?: string): Promise<T> {
-  const [match, address, path] = new RegExp(tezosStorageUri).exec(uri) ?? [];
-  assert(match !== undefined, `Invalid Tezos link: ${uri}`);
+  const match = TEZOS_STORAGE_REGEX.exec(uri);
+  assert(match, `Invalid Tezos storage URI: ${uri}`);
 
-  const addressToUse: string | undefined = address ?? defaultAddress;
-  assert(addressToUse !== undefined, `Tezos link must specify a contract address or provide a default address: ${uri}`);
+  const [, address, path] = match;
+  const contractAddress: string | null = address || defaultAddress || null;
+  assert(contractAddress !== null, `No contract address found in URI or default: ${uri}`);
 
-  const contract: ContractAbstraction<ContractProvider> = await Tezos().contract.at(addressToUse);
+  const contract: ContractAbstraction<ContractProvider> = await Tezos().contract.at(contractAddress);
   const storage: { metadata?: unknown } = await contract.storage();
+  assert(storage['metadata'] !== undefined, `No 'metadata' field found in contract storage: ${contractAddress}`);
 
-  // If storage does not have a "metadata" member, return it as is
-  let schema: MichelsonExpression = contract.schema.val;
-  if (!storage.metadata) {
-    return storage as T;
-  }
-
-  // Update schema root to the 'metadata' schema if it exists
-  let rawData: unknown = storage['metadata'];
-  if (rawData && typeof rawData === 'object' && 'schema' in rawData) {
-    schema = (rawData.schema as Schema).val;
-  }
-
-  const segments: string[] = path ? path.split('%2') : [];
-  const entrypoint: string | undefined = segments.pop();
-
-  // If the entrypoint is specified, get the value for that entrypoint
-  if (rawData instanceof BigMapAbstraction) {
-    const michelsonMap = await rawData.getMultipleValues([entrypoint ?? '']);
-    schema && michelsonMap.setType(schema);
-    rawData = (await unwrapMichelsonMap(michelsonMap))[entrypoint ?? ''];
-  }
-
-  // Transform MichelsonMap to a regular JavaScript object
-  if (MichelsonMap.isMichelsonMap(rawData)) {
-    schema && rawData.setType(schema);
-    rawData = await unwrapMichelsonMap(rawData);
-  }
-
-  return rawData as T;
+  const pathSegments: string[] = path ? path.split('%2F') : [];
+  return findDataInStorage(storage, pathSegments) as T;
 }

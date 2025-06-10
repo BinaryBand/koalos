@@ -1,4 +1,4 @@
 {
-  "ipfsUri": "^\\d?ipfs://([a-zA-Z0-9]{46}|[a-zA-Z0-9]{59})$",
+  "ipfsUri": "^\\d?ipfs://([a-zA-Z0-9]{46}|[a-zA-Z0-9]{59})(?:\\/.*)?$",
   "tezosStorageUri": "^tezos-storage:(?://(KT[1-9A-HJ-NP-Za-km-z]+)/?)?((?:[0-9A-Za-z-;?:@=&]|(?:%2))+)?$"
 }

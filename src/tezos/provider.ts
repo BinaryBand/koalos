@@ -1,8 +1,8 @@
 import { TezosToolkit, Signer } from '@taquito/taquito';
 import { RpcClientCache, RpcClient } from '@taquito/rpc';
 
-import RPC_URLS from '@public/constants/rpc-providers.json';
 import { signature, publicKey } from '@public/constants/stub-keys.json';
+import RPC_URLS from '@public/constants/rpc-providers.json';
 
 /**
  * A mock implementation of the `Signer` interface for estimating operation fees.
@@ -18,7 +18,7 @@ import { signature, publicKey } from '@public/constants/stub-keys.json';
  */
 export class FakeSigner implements Signer {
   constructor(private address: string) {}
-  public sign = async (op: string) => ({ bytes: '', sig: '', prefixSig: signature, sbytes: op });
+  public sign = async (sbytes: string) => ({ bytes: '', sig: '', prefixSig: signature, sbytes });
   public secretKey = async () => undefined;
   public publicKey = async () => publicKey;
   public publicKeyHash = async () => this.address;
@@ -38,5 +38,5 @@ const TaquitoInstances: TezosToolkit[] = RPC_URLS.map((rpc: string) => {
  */
 export default function Tezos(): TezosToolkit {
   const randomIndex: number = Math.floor(Math.random() * TaquitoInstances.length);
-  return TaquitoInstances[randomIndex]!;
+  return TaquitoInstances[1 || randomIndex]!;
 }

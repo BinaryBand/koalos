@@ -1,6 +1,6 @@
 import { Estimate, OpKind, ParamsWithKind, PreparedOperation, TezosToolkit } from '@taquito/taquito';
 import { OperationContents, OperationHash, OperationObject, PreapplyParams } from '@taquito/rpc';
-import { ForgeParams, LocalForger } from '@taquito/local-forging';
+import { LocalForger } from '@taquito/local-forging';
 import { blake2b } from '@noble/hashes/blake2';
 
 import Tezos, { FakeSigner } from '@/tezos/provider.js';
@@ -40,26 +40,25 @@ export async function applyEstimates(source: string, partialParams: ParamsWithKi
     return content;
   }
 
-  const contents: OperationContents[] = (transactions.contents ?? []).map(mapTransactions);
-  return contents;
+  return (transactions.contents ?? []).map(mapTransactions);
 }
 
+const Forger: LocalForger = new LocalForger();
 /**
- * Forges an operation using the provided parameters and returns the forged bytes along with their Blake2b hash.
+ * Forges a Tezos operation and computes its hash.
  *
- * @param forgeParams - The parameters required to forge the operation.
+ * @param contents - An array of operation contents to be forged.
  * @returns A promise that resolves to a tuple containing:
- *   - The forged bytes as a hexadecimal string.
- *   - The Blake2b hash (32 bytes, hex-encoded) of the forged payload.
+ *   - The forged operation bytes as a hex string.
+ *   - The Blake2b hash of the forged operation bytes as a hex string.
  *
  * @remarks
- * The function first forges the operation using the `Forger.forge` method.
- * It then prefixes the forged bytes with '03', computes the Blake2b hash of the resulting payload,
- * and returns both the forged bytes and the hash as hexadecimal strings.
+ * This function retrieves the current block hash, forges the operation using the provided contents,
+ * and computes the Blake2b hash of the forged bytes (prefixed with '03'). The hash can be used for signing.
  */
-const Forger: LocalForger = new LocalForger();
-export async function forgeOperation(forgeParams: ForgeParams): Promise<[string, string]> {
-  const forgedBytes: string = await Forger.forge(forgeParams);
+export async function forgeOperation(contents: OperationContents[]): Promise<[string, string]> {
+  const branch: string = await Tezos().rpc.getBlockHash();
+  const forgedBytes: string = await Forger.forge({ contents, branch });
 
   // Ask the sender to sign this hash
   const payload: Uint8Array = Buffer.from('03' + forgedBytes, 'hex');
@@ -73,11 +72,11 @@ export async function forgeOperation(forgeParams: ForgeParams): Promise<[string,
  * Sends a forged transaction to the Tezos blockchain by combining the forged operation bytes
  * with the signature bytes and injecting the complete operation.
  *
- * @param forgedBytes - The hex string representing the forged operation bytes.
- * @param signatureBytes - The hex string representing the signature bytes for the operation.
+ * @param forgedHex - The hex string representing the forged operation bytes.
+ * @param signatureHex - The hex string representing the signature bytes for the operation.
  * @returns A promise that resolves to the operation hash (`OperationHash`) of the injected transaction.
  */
-export async function sendForgedTransaction(forgedBytes: string, signatureBytes: string): Promise<OperationHash> {
-  const completeOperation: string = forgedBytes + signatureBytes;
+export async function sendForgedTransaction(forgedHex: string, signatureHex: string): Promise<OperationHash> {
+  const completeOperation: string = forgedHex + signatureHex;
   return Tezos().rpc.injectOperation(completeOperation);
 }

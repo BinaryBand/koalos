@@ -1,5 +1,8 @@
-import { ipfsUri } from '@public/constants/regex.json';
 import { assert } from '@/tools/utils';
+import { ipfsUri } from '@public/constants/regex.json';
+
+// --- Constants ---
+const IPFS_REGEX: RegExp = new RegExp(ipfsUri);
 
 /**
  * Determines whether the given URI is an IPFS link.
@@ -8,7 +11,7 @@ import { assert } from '@/tools/utils';
  * @returns `true` if the URI matches the IPFS pattern; otherwise, `false`.
  */
 export function isIpfsLink(uri: string): boolean {
-  return new RegExp(ipfsUri).test(uri);
+  return IPFS_REGEX.test(uri);
 }
 
 /**
@@ -23,7 +26,7 @@ export function isIpfsLink(uri: string): boolean {
  * @throws Will throw an error if the URI is invalid or if the fetch request fails.
  */
 export async function getFromIpfs(uri: string): Promise<unknown> {
-  const [match, hash] = new RegExp(ipfsUri).exec(uri) ?? [];
+  const [match, hash] = IPFS_REGEX.exec(uri) ?? [];
   assert(match !== undefined, `Invalid IPFS link: ${uri}`);
 
   const res: Response = await fetch(`https://ipfs.io/ipfs/${hash}`);

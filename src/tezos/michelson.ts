@@ -1,17 +1,15 @@
 import { MichelsonMap, MichelsonMapKey, Schema } from '@taquito/michelson-encoder';
 import { isIpfsLink, getFromIpfs } from '@/network/ipfs';
 import { isTezosLink, getFromTezos } from '@/network/tezos-storage';
-import { isJson } from '@/tools/utils';
+import { assert, isJson } from '@/tools/utils';
 
 function cleanString(input: string): string {
   // Regular expression to match non-printable characters
   return input.replace(/[\x00-\x1F\x7F]/g, '');
 }
 
-function unpackMichelsonPrimitive(value: unknown, valueSchema?: Schema): unknown {
-  if (typeof value !== 'string') {
-    return value;
-  }
+function unpackMichelsonValue(value: unknown, valueSchema?: Schema): unknown {
+  if (typeof value !== 'string') return value;
 
   if (valueSchema && 'prim' in valueSchema.val && valueSchema.val.prim) {
     switch (valueSchema.val.prim) {
@@ -29,43 +27,82 @@ function unpackMichelsonPrimitive(value: unknown, valueSchema?: Schema): unknown
   return value;
 }
 
-export async function unwrapMichelsonMap<O extends Record<string, unknown>>(
-  curr: MichelsonMap<MichelsonMapKey, unknown>,
-  contractAddress?: string
-): Promise<O> {
-  const valueSchema: Schema = curr['valueSchema'];
+async function resolveMetadata<T = Record<string, unknown>>(uri: string, contractAddress?: string): Promise<T | null> {
+  let metadataJson: unknown;
+  const cleanedUri = cleanString(uri);
 
-  // Transform the MichelsonMap into a regular object
-  let map: O = Array.from(curr.entries())
-    .filter(([_key, val]: [MichelsonMapKey, unknown]) => Boolean(val))
-    .reduce((acc: O, [key, val]: [MichelsonMapKey, unknown]) => {
-      const value: unknown = unpackMichelsonPrimitive(val, valueSchema);
-      return { ...acc, [`${key}`]: value };
-    }, {} as O);
+  // Fetch metadata from the appropriate source
+  if (isIpfsLink(cleanedUri)) {
+    metadataJson = await getFromIpfs(cleanedUri);
+  } else if (isTezosLink(cleanedUri)) {
+    metadataJson = await getFromTezos(cleanedUri, contractAddress);
+  } else {
+    return null; // Not a recognized metadata link
+  }
 
-  // If the map has an empty string key, it might be a link to metadata
-  if ('' in map && typeof map[''] === 'string') {
-    const emptyMember: string = cleanString(map['']);
-
-    // Check if the link is an IPFS or Tezos link
-    let metadata: unknown;
-    if (isIpfsLink(emptyMember)) {
-      metadata = await getFromIpfs(emptyMember);
-    } else if (isTezosLink(emptyMember)) {
-      metadata = await getFromTezos(emptyMember, contractAddress);
-    }
-
-    // If the metadata is a string and looks like JSON, parse it
-    if (typeof metadata === 'string' && isJson(metadata)) {
-      metadata = JSON.parse(metadata);
-    }
-
-    // Remove the link after unwrapping and merge metadata into root
-    if (typeof metadata === 'object' && metadata !== undefined && metadata !== null) {
-      map = { ...map, ...metadata };
-      delete map[''];
+  // Parse the fetched content if it's a JSON string
+  if (typeof metadataJson === 'string' && isJson(metadataJson)) {
+    try {
+      metadataJson = JSON.parse(metadataJson);
+    } catch {
+      return null; // Invalid JSON
     }
   }
 
-  return map;
+  // Ensure the final metadata is a valid object
+  if (typeof metadataJson === 'object' && metadataJson !== null) {
+    return metadataJson as T;
+  }
+
+  return null;
+}
+
+/**
+ * Recursively unwraps a `MichelsonMap` into a plain JavaScript object, converting nested maps and unpacking primitive values.
+ *
+ * - If a value in the map is itself a `MichelsonMap`, it is recursively unwrapped.
+ * - If a value is a primitive, it is unpacked using the provided schema.
+ * - If the map contains a TZIP-16 metadata URI (under the empty string key), the metadata is fetched and merged with the map data.
+ *   On-chain values will overwrite off-chain metadata values in case of conflict.
+ *
+ * @template T - The expected output object type.
+ * @param michelsonMap - The MichelsonMap to unwrap.
+ * @param contractAddress - (Optional) The contract address, used for resolving TZIP-16 metadata if present.
+ * @returns A promise that resolves to the unwrapped object of type `T`.
+ */
+export async function unwrapMichelsonMap<T extends Record<string, unknown>>(
+  michelsonMap: MichelsonMap<MichelsonMapKey, unknown>,
+  contractAddress?: string
+): Promise<T> {
+  const result: Record<string, unknown> = {};
+  const valueSchema: Schema = michelsonMap['valueSchema'];
+
+  // 1. Convert the MichelsonMap to a plain object
+  for (const [key, value] of michelsonMap.entries()) {
+    if (value === undefined) continue;
+    assert(typeof key === 'string');
+
+    // Recursively unwrap nested maps or unpack primitive values
+    if (MichelsonMap.isMichelsonMap(value)) {
+      result[key] = await unwrapMichelsonMap(value, contractAddress);
+    } else {
+      result[key] = unpackMichelsonValue(value, valueSchema);
+    }
+  }
+
+  // 2. Handle TZIP-16 metadata link (if present)
+  const metadataUri: unknown = result[''];
+  if (typeof metadataUri === 'string') {
+    const metadata = await resolveMetadata(metadataUri, contractAddress);
+
+    if (metadata) {
+      // Merge metadata with the on-chain map data.
+      // On-chain values will overwrite off-chain metadata values in case of conflict.
+      const mergedData: Record<string, unknown> = { ...metadata, ...result };
+      delete mergedData['']; // Remove the metadata URI link
+      return mergedData as T;
+    }
+  }
+
+  return result as T;
 }

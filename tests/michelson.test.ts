@@ -2,7 +2,6 @@ import { unwrapMichelsonMap } from '@/tezos/michelson';
 import { MichelsonMap } from '@taquito/michelson-encoder';
 const { isIpfsLink, getFromIpfs } = require('@/network/ipfs');
 const { isTezosLink, getFromTezos } = require('@/network/tezos-storage');
-const { isJson } = require('@/tools/utils');
 
 // Mock dependencies
 jest.mock('@/network/ipfs', () => ({
@@ -12,9 +11,6 @@ jest.mock('@/network/ipfs', () => ({
 jest.mock('@/network/tezos-storage', () => ({
   isTezosLink: jest.fn(),
   getFromTezos: jest.fn(),
-}));
-jest.mock('@/tools/utils', () => ({
-  isJson: jest.fn(),
 }));
 
 describe('unwrapMichelsonMap', () => {
@@ -26,32 +22,28 @@ describe('unwrapMichelsonMap', () => {
     const map = new MichelsonMap();
     map.set('foo', 'bar');
     map.set('baz', 42);
-    (map as any)['valueSchema'] = { val: {} };
 
-    const result = await unwrapMichelsonMap(map);
+    const result: Record<string, unknown> = await unwrapMichelsonMap(map);
     expect(result).toEqual({ foo: 'bar', baz: 42 });
   });
 
-  it('should filter out falsy values', async () => {
+  it('should filter out undefined values', async () => {
     const map = new MichelsonMap();
     map.set('foo', null);
     map.set('baz', 0);
-    map.set('bar', 'value');
-    (map as any)['valueSchema'] = { val: {} };
+    map.set('bar', undefined);
 
     const result = await unwrapMichelsonMap(map);
-    expect(result).toEqual({ bar: 'value' });
+    expect(result).toEqual({ foo: null, baz: 0 });
   });
 
   it('should fetch and merge IPFS metadata if empty string key is an IPFS link', async () => {
     const map = new MichelsonMap();
     map.set('', 'ipfs://abc123');
     map.set('other', 'value');
-    (map as any)['valueSchema'] = { val: {} };
 
     isIpfsLink.mockReturnValue(true);
     getFromIpfs.mockResolvedValue('{"meta":"data"}');
-    isJson.mockReturnValue(true);
 
     const result = await unwrapMichelsonMap(map);
     expect(isIpfsLink).toHaveBeenCalledWith('ipfs://abc123');
@@ -64,12 +56,10 @@ describe('unwrapMichelsonMap', () => {
     const map = new MichelsonMap();
     map.set('', 'tezos-storage:here');
     map.set('foo', 1);
-    (map as any)['valueSchema'] = { val: {} };
 
     isIpfsLink.mockReturnValue(false);
     isTezosLink.mockReturnValue(true);
     getFromTezos.mockResolvedValue('{"hello":"world"}');
-    isJson.mockReturnValue(true);
 
     const result = await unwrapMichelsonMap(map, 'KT1...');
     expect(isTezosLink).toHaveBeenCalledWith('tezos-storage:here');
@@ -85,7 +75,6 @@ describe('unwrapMichelsonMap', () => {
 
     isIpfsLink.mockReturnValue(true);
     getFromIpfs.mockResolvedValue('not a json');
-    isJson.mockReturnValue(false);
 
     const result = await unwrapMichelsonMap(map);
     expect(result).toEqual({ '': 'ipfs://notjson' });
@@ -98,7 +87,6 @@ describe('unwrapMichelsonMap', () => {
 
     isIpfsLink.mockReturnValue(true);
     getFromIpfs.mockResolvedValue('42');
-    isJson.mockReturnValue(true);
 
     const result = await unwrapMichelsonMap(map);
     expect(result).toEqual({ '': 'ipfs://abc' });
