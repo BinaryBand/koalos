@@ -1,8 +1,8 @@
-import { OpKind, ParamsWithKind, TezosToolkit } from '@taquito/taquito';
+import { OpKind, ParamsWithKind } from '@taquito/taquito';
 import { OperationContents } from '@taquito/rpc';
 
-import Tezos, { FakeSigner } from '@/tezos/provider';
 import { applyEstimates } from '@/tezos/transaction';
+import { TezosRpc } from '@/tezos/provider';
 
 function addressToDomain(address: string): Promise<string> {
   // Placeholder for the actual implementation of address to domain conversion
@@ -16,7 +16,7 @@ function addressToDomain(address: string): Promise<string> {
  * @returns A promise that resolves to a `WalletData` object containing the address, balance (in tez), and domain.
  */
 export async function getWalletData(address: string): Promise<WalletData> {
-  const [_balance, domain] = await Promise.all([Tezos().rpc.getBalance(address), addressToDomain(address)]);
+  const [_balance, domain] = await Promise.all([TezosRpc().getBalance(address), addressToDomain(address)]);
   const balance: number = _balance.toNumber() / 1e6; // Convert from mutez to tez
   return { address, balance, domain };
 }
@@ -36,9 +36,6 @@ function prepareTransfers(source: string, recipients: TezosRecipient[]): ParamsW
  * @returns A promise that resolves to an array of operation contents representing the transaction(s).
  */
 export async function createTransaction(source: string, recipients: TezosRecipient[]): Promise<OperationContents[]> {
-  const tezos: TezosToolkit = Tezos();
-  tezos.setProvider({ signer: new FakeSigner(source) });
-
   const partialParams: ParamsWithKind[] = prepareTransfers(source, recipients);
   return applyEstimates(source, partialParams);
 }

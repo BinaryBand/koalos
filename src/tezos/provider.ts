@@ -38,5 +38,9 @@ const TaquitoInstances: TezosToolkit[] = RPC_URLS.map((rpc: string) => {
  */
 export default function Tezos(): TezosToolkit {
   const randomIndex: number = Math.floor(Math.random() * TaquitoInstances.length);
-  return TaquitoInstances[1 || randomIndex]!;
+  return TaquitoInstances[randomIndex]!;
+}
+
+export function TezosRpc() {
+  return Tezos().rpc;
 }

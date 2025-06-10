@@ -1,4 +1,4 @@
-import { getTokenMetadata, getMetadata } from '@/tezos/metadata';
+import { getTokenMetadata, getMetadata } from '@/index';
 
 describe('token metadata', () => {
   it('fetch FA1.2 token metadata from token_metadata[0][1]', async () => {
@@ -49,33 +49,40 @@ describe('contract metadata', () => {
   it('directly from from BigMap members', async () => {
     const swc: string = 'KT19jW4iyZYrU3AGXqhV33Aa73yGWuFe1b2g';
     const swcTokenMetadata: TZip17Metadata | undefined = await getMetadata(swc);
+
     expect(swcTokenMetadata).toBeDefined();
     expect(swcTokenMetadata!.name).toBe('SwindleCoin');
     expect(swcTokenMetadata!.version).toBe('v1.0');
     const description: string = 'This token is worth nothing. Anyone who says otherwise is trying to swindle you.';
     expect(swcTokenMetadata!.description).toBe(description);
   }, 5000);
+
   it('from internal contract storage, tezos-storage:data', async () => {
     const kusd: string = 'KT1K9gCRgaLRFKTErYt1wVxA3Frb9FjasjTV';
     const kusdTokenMetadata: TZip17Metadata | undefined = await getMetadata(kusd);
+
     expect(kusdTokenMetadata).toBeDefined();
     expect(kusdTokenMetadata!.name).toBe('Kolibri Token Contract');
     expect(kusdTokenMetadata!.description).toBe('FA1.2 Implementation of kUSD');
     expect(kusdTokenMetadata!.homepage).toBe('https://kolibri.finance');
   }, 5000);
+
   // This asset appears to be a scam, but it's the only one I could find with this metadata format.
   it('from external contract storage, tezos-storage://KT1GetVcigbLbWExeb6BqxHtZCbPGndJX2Xg/metadataJSON', async () => {
     const usds: string = 'KT1REEb5VxWRjcHm5GzDMwErMmNFftsE5Gpf';
     const usdsTokenMetadata: TZip17Metadata | undefined = await getMetadata(usds);
+
     expect(usdsTokenMetadata).toBeDefined();
     expect(usdsTokenMetadata!.homepage).toBe('https://stably.io/');
     expect(usdsTokenMetadata!.name).toBe('Stably USD');
     expect(usdsTokenMetadata!.version).toBe('1.7.0');
     expect(usdsTokenMetadata!.license!['name']).toBe('MIT');
   }, 5000);
+
   it('fetch metadata from assets.metadata and IPFS', async () => {
     const plenty: string = 'KT1GRSvLoikDsXujKgZPsGLX8k8VvR2Tq95b';
     const plentyTokenMetadata: TZip17Metadata | undefined = await getMetadata(plenty);
+
     expect(plentyTokenMetadata).toBeDefined();
     expect(plentyTokenMetadata!.name).toBe('PLENTY');
     expect(plentyTokenMetadata!.description).toBe('Plenty DeFi DAO');

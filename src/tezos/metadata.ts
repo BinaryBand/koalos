@@ -1,5 +1,5 @@
 import { BigMapAbstraction, ContractAbstraction, ContractProvider } from '@taquito/taquito';
-import { MichelsonMap, MichelsonMapKey } from '@taquito/michelson-encoder';
+import { MichelsonMap } from '@taquito/michelson-encoder';
 import { unwrapMichelsonMap } from '@/tezos/michelson';
 import Tezos from '@/tezos/provider';
 
@@ -17,29 +17,19 @@ export async function getMetadata(address: string): Promise<TZip17Metadata | und
   const contract: ContractAbstraction<ContractProvider> = await Tezos().contract.at(address);
   const storage: TZip16Storage = await contract.storage();
 
+  const michelsonMap = new MichelsonMap();
   const metadata: BigMapAbstraction = storage.metadata;
-  const faMetadata: MichelsonMap<MichelsonMapKey, unknown> = await metadata.getMultipleValues<TZip16Metadata>([
-    '',
-    'name',
-    'description',
-    'version',
-    'license',
-    'authors',
-    'homepage',
-    'source',
-    'interfaces',
-    'errors',
-    'views',
-    'permissions',
-  ]);
+  michelsonMap.set('', await metadata.get(''));
 
-  if (MichelsonMap.isMichelsonMap(faMetadata)) {
-    const metadataSchema: MichelsonExpression = metadata['schema']['val'];
-    faMetadata.setType(metadataSchema);
-    return unwrapMichelsonMap<TZip17Metadata>(faMetadata, contract.address);
+  if (michelsonMap.get('') === undefined) {
+    michelsonMap.set('name', await metadata.get('name'));
+    michelsonMap.set('description', await metadata.get('description'));
+    michelsonMap.set('version', await metadata.get('version'));
   }
 
-  return undefined;
+  const metadataSchema: MichelsonExpression = metadata['schema']['val'];
+  michelsonMap.setType(metadataSchema);
+  return unwrapMichelsonMap<TZip17Metadata>(michelsonMap, contract.address);
 }
 
 /**
@@ -64,8 +54,8 @@ export async function getTokenMetadata(address: string, tokenId: number = 0): Pr
   const faTokenMetadata: Record<string, unknown> | undefined = await tokenMetadata?.get(tokenId);
   const tokenInfo: unknown = faTokenMetadata?.['token_info'] ?? faTokenMetadata?.['1'];
   if (MichelsonMap.isMichelsonMap(tokenInfo)) {
-    return await unwrapMichelsonMap<TZip21TokenMetadata>(tokenInfo);
+    return unwrapMichelsonMap<TZip21TokenMetadata>(tokenInfo);
   }
 
-  return undefined;
+  return tokenInfo as TZip21TokenMetadata | undefined;
 }

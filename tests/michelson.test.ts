@@ -1,4 +1,4 @@
-import { unwrapMichelsonMap } from '@/tezos/michelson';
+import { unwrapMichelsonMap } from '@/index';
 import { MichelsonMap } from '@taquito/michelson-encoder';
 const { isIpfsLink, getFromIpfs } = require('@/network/ipfs');
 const { isTezosLink, getFromTezos } = require('@/network/tezos-storage');

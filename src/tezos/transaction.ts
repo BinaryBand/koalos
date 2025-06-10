@@ -3,7 +3,7 @@ import { OperationContents, OperationHash, OperationObject, PreapplyParams } fro
 import { LocalForger } from '@taquito/local-forging';
 import { blake2b } from '@noble/hashes/blake2';
 
-import Tezos, { FakeSigner } from '@/tezos/provider.js';
+import Tezos, { FakeSigner, TezosRpc } from '@/tezos/provider.js';
 import { assert } from '@/tools/utils';
 
 /**
@@ -57,7 +57,7 @@ const Forger: LocalForger = new LocalForger();
  * and computes the Blake2b hash of the forged bytes (prefixed with '03'). The hash can be used for signing.
  */
 export async function forgeOperation(contents: OperationContents[]): Promise<[string, string]> {
-  const branch: string = await Tezos().rpc.getBlockHash();
+  const branch: string = await TezosRpc().getBlockHash();
   const forgedBytes: string = await Forger.forge({ contents, branch });
 
   // Ask the sender to sign this hash
@@ -78,5 +78,5 @@ export async function forgeOperation(contents: OperationContents[]): Promise<[st
  */
 export async function sendForgedTransaction(forgedHex: string, signatureHex: string): Promise<OperationHash> {
   const completeOperation: string = forgedHex + signatureHex;
-  return Tezos().rpc.injectOperation(completeOperation);
+  return TezosRpc().injectOperation(completeOperation);
 }
