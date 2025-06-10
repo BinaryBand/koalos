@@ -1,6 +1,7 @@
 import { BigMapAbstraction, ContractAbstraction, ContractProvider } from '@taquito/taquito';
 import { MichelsonMap, MichelsonMapKey } from '@taquito/michelson-encoder';
 import { unwrapMichelsonMap } from '@/tezos/michelson';
+import Tezos from '@/tezos/provider';
 
 /**
  * Retrieves and unwraps the TZIP-17 metadata for a given smart contract.
@@ -12,9 +13,8 @@ import { unwrapMichelsonMap } from '@/tezos/michelson';
  * @param contract - The contract abstraction instance to fetch metadata from.
  * @returns A promise that resolves to the unwrapped TZip17Metadata object if available, or `undefined` otherwise.
  */
-export async function getMetadata(
-  contract: ContractAbstraction<ContractProvider>
-): Promise<TZip17Metadata | undefined> {
+export async function getMetadata(address: string): Promise<TZip17Metadata | undefined> {
+  const contract: ContractAbstraction<ContractProvider> = await Tezos().contract.at(address);
   const storage: TZip16Storage = await contract.storage();
 
   const metadata: BigMapAbstraction = storage.metadata;
@@ -54,10 +54,8 @@ export async function getMetadata(
  * @param tokenId - The ID of the token whose metadata is to be retrieved. Defaults to 0.
  * @returns A promise that resolves to the token metadata in TZip21 format, or `undefined` if not found.
  */
-export async function getTokenMetadata(
-  contract: ContractAbstraction<ContractProvider>,
-  tokenId = 0
-): Promise<TZip21TokenMetadata | undefined> {
+export async function getTokenMetadata(address: string, tokenId: number = 0): Promise<TZip21TokenMetadata | undefined> {
+  const contract: ContractAbstraction<ContractProvider> = await Tezos().contract.at(address);
   const storage: TZip16Storage = await contract.storage();
 
   let tokenMetadata: BigMapAbstraction | null = 'token_metadata' in storage ? storage.token_metadata : null;
