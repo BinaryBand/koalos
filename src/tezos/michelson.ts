@@ -3,6 +3,11 @@ import { isIpfsLink, getFromIpfs } from '@/network/ipfs';
 import { isTezosLink, getFromTezos } from '@/network/tezos-storage';
 import { isJson } from '@/tools/utils';
 
+function cleanString(input: string): string {
+  // Regular expression to match non-printable characters
+  return input.replace(/[\x00-\x1F\x7F]/g, '');
+}
+
 function unpackMichelsonPrimitive(value: unknown, valueSchema?: Schema): unknown {
   if (typeof value !== 'string') {
     return value;
@@ -40,7 +45,7 @@ export async function unwrapMichelsonMap<O extends Record<string, unknown>>(
 
   // If the map has an empty string key, it might be a link to metadata
   if ('' in map && typeof map[''] === 'string') {
-    const emptyMember: string = map[''];
+    const emptyMember: string = cleanString(map['']);
 
     // Check if the link is an IPFS or Tezos link
     let metadata: unknown;

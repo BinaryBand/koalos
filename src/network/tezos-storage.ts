@@ -1,9 +1,10 @@
 import { BigMapAbstraction, ContractAbstraction, ContractProvider } from '@taquito/taquito';
-import { MichelsonMap, MichelsonMapKey, Schema } from '@taquito/michelson-encoder';
+import { MichelsonMap, Schema } from '@taquito/michelson-encoder';
 
 import { tezosStorageUri } from '@public/constants/regex.json';
 import { assert } from '@/tools/utils';
 import Tezos from '@/tezos/provider';
+import { unwrapMichelsonMap } from '@/tezos/michelson';
 
 /**
  * Determines whether a given URI matches the Tezos storage URI pattern.
@@ -55,16 +56,17 @@ export async function getFromTezos<T = unknown>(uri: string, defaultAddress?: st
   const segments: string[] = path ? path.split('%2') : [];
   const entrypoint: string | undefined = segments.pop();
 
-  // If an entrypoint is specified, get the value for that entrypoint
+  // If the entrypoint is specified, get the value for that entrypoint
   if (rawData instanceof BigMapAbstraction) {
-    const michelsonMap: MichelsonMap<MichelsonMapKey, unknown> = await rawData.getMultipleValues([entrypoint ?? '']);
+    const michelsonMap = await rawData.getMultipleValues([entrypoint ?? '']);
+    schema && michelsonMap.setType(schema);
+    rawData = (await unwrapMichelsonMap(michelsonMap))[entrypoint ?? ''];
+  }
 
-    // Ensure the schema is set in case the user wants to unwrap it later
-    if (schema !== undefined && schema !== null && MichelsonMap.isMichelsonMap(michelsonMap)) {
-      michelsonMap.setType(schema);
-    }
-
-    rawData = michelsonMap.get(entrypoint ?? '');
+  // Transform MichelsonMap to a regular JavaScript object
+  if (MichelsonMap.isMichelsonMap(rawData)) {
+    schema && rawData.setType(schema);
+    rawData = await unwrapMichelsonMap(rawData);
   }
 
   return rawData as T;
