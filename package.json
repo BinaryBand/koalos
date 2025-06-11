@@ -4,7 +4,7 @@
   "description": "",
   "license": "MIT",
   "author": "Shane D",
-  "main": "./dist/bundle.js",
+  "main": "./dist/tezos-wallet.js",
   "scripts": {
     "start": "npm run build && node .",
     "build": "npx rollup -c --bundleConfigAsCjs",
@@ -19,6 +19,7 @@
     "@rollup/plugin-commonjs": "^28.0.3",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-terser": "^0.4.4",
     "@rollup/plugin-typescript": "^12.1.2",
     "@types/jest": "^29.5.14",
     "babel-jest": "^29.7.0",
@@ -30,7 +31,6 @@
     "typedoc": "^0.28.5"
   },
   "dependencies": {
-    "@noble/curves": "^1.9.2",
     "@noble/hashes": "^1.8.0",
     "@taquito/rpc": "^22.0.0",
     "@taquito/signer": "^22.0.0",

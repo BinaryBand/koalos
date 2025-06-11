@@ -17,6 +17,13 @@ function unpackMichelsonValue(value: unknown, valueSchema?: Schema): unknown {
         return Buffer.from(value, 'hex').toString('utf8');
       case 'timestamp':
         return new Date(value);
+      case 'nat':
+      case 'int':
+      case 'mutez':
+        const num: number = Number(value);
+        return !isNaN(num) ? num : value;
+      case 'bool':
+        return value === 'True' || value === 'true' || value === '1';
     }
   }
 
@@ -42,19 +49,10 @@ async function resolveMetadata<T = Record<string, unknown>>(uri: string, contrac
 
   // Parse the fetched content if it's a JSON string
   if (typeof metadataJson === 'string' && isJson(metadataJson)) {
-    try {
-      metadataJson = JSON.parse(metadataJson);
-    } catch {
-      return null; // Invalid JSON
-    }
+    metadataJson = JSON.parse(metadataJson);
   }
 
-  // Ensure the final metadata is a valid object
-  if (typeof metadataJson === 'object' && metadataJson !== null) {
-    return metadataJson as T;
-  }
-
-  return null;
+  return metadataJson as T;
 }
 
 /**

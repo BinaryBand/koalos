@@ -3,7 +3,7 @@ import { OperationContents, OperationHash, OperationObject, PreapplyParams } fro
 import { LocalForger } from '@taquito/local-forging';
 import { blake2b } from '@noble/hashes/blake2';
 
-import Tezos, { FakeSigner, TezosRpc } from '@/tezos/provider.js';
+import Tezos, { FakeSigner, TezosRpc } from '@/tezos/provider';
 import { assert } from '@/tools/utils';
 
 /**
