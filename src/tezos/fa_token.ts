@@ -2,8 +2,8 @@ import { ForgeParams, OpKind, ParamsWithKind, TransferParams, UnitValue } from '
 import { OperationContents } from '@taquito/rpc';
 
 import { applyEstimates } from '@/tezos/transaction';
+import { TezosRpc } from '@/tezos/provider';
 import { assert } from '@/tools/utils';
-import Tezos from '@/tezos/provider';
 
 function isFA12(token: FA): token is FA12 {
   return 'getBalance' in token.views && 'getTotalSupply' in token.views;
@@ -89,6 +89,6 @@ export async function createTokenTransaction(
   const partialParams: ParamsWithKind[] = transactions.map((tx) => ({ ...tx, kind: OpKind.TRANSACTION }));
   const contents: OperationContents[] = await applyEstimates(source, partialParams);
 
-  const branch: string = await Tezos().rpc.getBlockHash();
+  const branch: string = await TezosRpc().getBlockHash();
   return { contents, branch };
 }

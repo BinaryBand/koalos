@@ -1,5 +1,5 @@
 import { isIpfsLink } from '@/network/ipfs';
-import { isTezosLink } from '@/network/tezos-storage';
+import { isTezosLink } from '@/index';
 
 const CID_V0: string = 'QmSnuWmxptJZdLJpKRarxBMS2Ju2oANVrgbr2xWbie9b2D';
 const CID_V1: string = 'bafybeiaysi4s6lnjev27ln5icwm6tueaw2vdykrtjkwiphwekaywqhcjze';
