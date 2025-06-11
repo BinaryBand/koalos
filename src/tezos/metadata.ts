@@ -10,7 +10,7 @@ import Tezos from '@/tezos/provider';
  * retrieves multiple standard TZIP-16 metadata fields, and, if the result is a MichelsonMap,
  * applies the schema and unwraps the map into a strongly-typed TZip17Metadata object.
  *
- * @param contract - The contract abstraction instance to fetch metadata from.
+ * @param address - The contract abstraction instance to fetch metadata from.
  * @returns A promise that resolves to the unwrapped TZip17Metadata object if available, or `undefined` otherwise.
  */
 export async function getMetadata(address: string): Promise<TZip17Metadata | undefined> {
@@ -40,7 +40,7 @@ export async function getMetadata(address: string): Promise<TZip17Metadata | und
  * specified `tokenId`, unwraps the Michelson map if present, and returns the token metadata
  * in the TZip21 format.
  *
- * @param contract - The contract abstraction instance to query.
+ * @param address - The contract abstraction instance to query.
  * @param tokenId - The ID of the token whose metadata is to be retrieved. Defaults to 0.
  * @returns A promise that resolves to the token metadata in TZip21 format, or `undefined` if not found.
  */
