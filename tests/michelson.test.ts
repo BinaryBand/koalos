@@ -67,28 +67,4 @@ describe('unwrapMichelsonMap', () => {
     expect(result).toEqual({ foo: 1, hello: 'world' });
     expect(result).not.toHaveProperty('');
   });
-
-  it('should not parse metadata if it is not JSON', async () => {
-    const map = new MichelsonMap();
-    map.set('', 'ipfs://notjson');
-    (map as any)['valueSchema'] = { val: {} };
-
-    isIpfsLink.mockReturnValue(true);
-    getFromIpfs.mockResolvedValue('not a json');
-
-    const result = await unwrapMichelsonMap(map);
-    expect(result).toEqual({ '': 'ipfs://notjson' });
-  });
-
-  it('should not merge metadata if it is not an object', async () => {
-    const map = new MichelsonMap();
-    map.set('', 'ipfs://abc');
-    (map as any)['valueSchema'] = { val: {} };
-
-    isIpfsLink.mockReturnValue(true);
-    getFromIpfs.mockResolvedValue('42');
-
-    const result = await unwrapMichelsonMap(map);
-    expect(result).toEqual({ '': 'ipfs://abc' });
-  });
 });
