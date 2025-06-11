@@ -5,6 +5,7 @@
   "license": "MIT",
   "author": "Shane D",
   "main": "./dist/tezos-wallet.js",
+  "type": "module",
   "scripts": {
     "start": "npm run build && node .",
     "build": "npx rollup -c --bundleConfigAsCjs",
