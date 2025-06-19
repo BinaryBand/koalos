@@ -53,5 +53,6 @@ export function isJson(item: unknown): item is Record<string, unknown> {
  * @returns `true` if the value is not `undefined`, `null`, or `false`; otherwise, `false`.
  */
 export function isDefined(value: unknown): value is NonNullable<unknown> {
-  return value !== undefined && value !== null && value !== false;
+  assert(value !== null, 'Value is null');
+  return value !== undefined && value !== false;
 }

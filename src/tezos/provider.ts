@@ -1,5 +1,6 @@
-import { TezosToolkit, Signer } from '@taquito/taquito';
-import { RpcClientCache, RpcClient } from '@taquito/rpc';
+import { MichelCodecPacker, TezosToolkit, Signer } from '@taquito/taquito';
+import { RpcClientCache, RpcClient, RpcClientInterface } from '@taquito/rpc';
+import { LocalForger } from '@taquito/local-forging';
 
 import { signature, publicKey } from '@public/constants/stub-keys.json';
 import RPC_URLS from '@public/constants/rpc-providers.json';
@@ -27,7 +28,10 @@ export class FakeSigner implements Signer {
 const TaquitoInstances: TezosToolkit[] = RPC_URLS.map((rpc: string) => {
   const rpcClient: RpcClient = new RpcClient(rpc);
   const rpcClientCache: RpcClientCache = new RpcClientCache(rpcClient);
-  return new TezosToolkit(rpcClientCache);
+  const toolkit: TezosToolkit = new TezosToolkit(rpcClientCache);
+  toolkit.setPackerProvider(new MichelCodecPacker());
+  toolkit.setForgerProvider(new LocalForger());
+  return toolkit;
 });
 
 // Return a random instance of TezosToolkit to load balance across multiple RPC nodes
@@ -41,6 +45,7 @@ export default function Tezos(): TezosToolkit {
   return TaquitoInstances[randomIndex]!;
 }
 
-export function TezosRpc() {
-  return Tezos().rpc;
+export function TezosRpc(): RpcClientInterface {
+  const rpcProvider: RpcClientInterface = Tezos().rpc;
+  return rpcProvider;
 }

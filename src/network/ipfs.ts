@@ -25,7 +25,7 @@ export function isIpfsLink(uri: string): boolean {
  * @returns A promise that resolves to the parsed JSON object if the response is JSON, or the raw string data otherwise.
  * @throws Will throw an error if the URI is invalid or if the fetch request fails.
  */
-export async function getFromIpfs(uri: string): Promise<unknown> {
+export async function getFromIpfs<T = string | object>(uri: string): Promise<T> {
   const [match, hash] = IPFS_REGEX.exec(uri) ?? [];
   assert(match !== undefined, `Invalid IPFS link: ${uri}`);
 
@@ -34,12 +34,9 @@ export async function getFromIpfs(uri: string): Promise<unknown> {
     throw new Error(`Failed to fetch IPFS link: ${uri} (status: ${res.status})`);
   }
 
-  let rawData: string | null;
   if (res.headers.get('Content-Type')?.includes('application/json')) {
-    rawData = await res.json();
+    return res.json();
   } else {
-    rawData = await res.text();
+    return res.text() as T;
   }
-
-  return rawData;
 }

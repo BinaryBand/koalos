@@ -8,9 +8,11 @@ function encode(data: MichelsonData, type?: MichelsonType): string {
   return b58cencode(hash, prefix.expr);
 }
 
-export function toExpr(data: string | number): string {
+export function toExpr(data: Primitive): string {
   if (typeof data === 'number') {
     return encode({ int: data.toString() });
+  } else if (typeof data === 'boolean') {
+    return encode({ prim: data ? 'True' : 'False' });
   }
 
   return encode({ string: data });

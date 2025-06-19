@@ -1,4 +1,14 @@
 import { getTokenMetadata, getMetadata } from '@/index';
+import PLENTY from '@public/tests/plenty.json';
+
+// Mock dependencies
+jest.mock('@/network/ipfs', () => ({
+  isIpfsLink: jest.fn().mockImplementation(jest.requireActual('@/network/ipfs').isIpfsLink),
+  getFromIpfs: (uri: string) =>
+    ({
+      'ipfs://bafkreibd6h3lwtyjzfh2ts47prtdzmooi54rjgqytnvbil3cuvjg2tkbd4': PLENTY,
+    }[uri]),
+}));
 
 describe('token metadata', () => {
   it('fetch FA1.2 token metadata from token_metadata[0][1]', async () => {
