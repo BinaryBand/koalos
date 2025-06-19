@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     /* Language and Environment */
-    "target": "esnext",
+    "target": "es2020",
 
     /* Modules */
     "module": "es6",
@@ -42,6 +42,10 @@
     "noPropertyAccessFromIndexSignature": true,
     "allowUnusedLabels": true,
     "allowUnreachableCode": false,
+
+    // "declaration": true,
+    // "declarationDir": "./dist",
+    // "emitDeclarationOnly": true,
 
     /* Completeness */
     "skipDefaultLibCheck": true,
