@@ -1,13 +1,8 @@
 import { OpKind, ParamsWithKind } from '@taquito/taquito';
 import { OperationContents } from '@taquito/rpc';
 
-import { applyEstimates } from '@/tezos/transaction';
+import { applyEstimates } from '@/tezos/operations';
 import { TezosRpc } from '@/tezos/provider';
-
-function addressToDomain(address: string): Promise<string> {
-  // Placeholder for the actual implementation of address to domain conversion
-  return Promise.resolve(`domain-for-${address}`);
-}
 
 /**
  * Retrieves wallet data for a given Tezos address, including balance and associated domain.
@@ -16,9 +11,9 @@ function addressToDomain(address: string): Promise<string> {
  * @returns A promise that resolves to a `WalletData` object containing the address, balance (in tez), and domain.
  */
 export async function getWalletData(address: string): Promise<WalletData> {
-  const [_balance, domain] = await Promise.all([TezosRpc().getBalance(address), addressToDomain(address)]);
+  const _balance: BigNumber = await TezosRpc().getBalance(address);
   const balance: number = _balance.toNumber() / 1e6; // Convert from mutez to tez
-  return { address, balance, domain };
+  return { address, balance };
 }
 
 function prepareTransfers(source: string, recipients: TezosRecipient[]): ParamsWithKind[] {

@@ -5,12 +5,16 @@ import BigNumber from 'bignumber.js';
  * If the condition is false, throws an Error with the provided message or a default message.
  *
  * @param condition - The condition to assert. If falsy, an error is thrown.
- * @param message - Optional error message to display if the assertion fails.
+ * @param messages - Optional error message to display if the assertion fails.
  * @throws {Error} If the condition is falsy.
  */
-export function assert(condition: unknown, message?: string): asserts condition {
+export function assert(condition: unknown, ...messages: string[]): asserts condition {
   if (!condition) {
-    throw new Error(message ?? 'Assertion failed');
+    if (messages.length > 1) {
+      console.error(...messages.slice(1));
+    }
+
+    throw new Error(messages?.[0] ?? 'Assertion failed');
   }
 }
 

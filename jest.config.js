@@ -9,6 +9,7 @@ const jestConfig = {
     '@/*': ['src/*'],
     '@public/*': ['public/*'],
   }),
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
 };
 
 export default jestConfig;

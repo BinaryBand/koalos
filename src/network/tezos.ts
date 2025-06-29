@@ -1,10 +1,10 @@
-import { BigMapAbstraction, ContractAbstraction, ContractProvider } from '@taquito/taquito';
-import { MichelsonMap, MichelsonMapKey } from '@taquito/michelson-encoder';
+import { MichelsonMap } from '@taquito/taquito';
+
+import { getStorage, Storage } from '@/tezos/storage';
+import { BigMap } from '@/tezos/storage';
+import { assert } from '@/tools/utils';
 
 import { tezosStorageUri } from '@public/constants/regex.json';
-import { unwrapMichelsonMap } from '@/tezos/michelson';
-import { assert, isDefined, isJson } from '@/tools/utils';
-import Tezos from '@/tezos/provider';
 
 // --- Constants ---
 const TEZOS_STORAGE_REGEX: RegExp = new RegExp(tezosStorageUri);
@@ -19,25 +19,32 @@ export function isTezosLink(uri: string): boolean {
   return TEZOS_STORAGE_REGEX.test(uri);
 }
 
-async function findDataInStorage(data: { metadata?: unknown }, segments: string[]): Promise<unknown> {
-  const pathSegments: string[] = segments;
+/**
+ * Normalizes a Tezos storage URI by ensuring it includes a contract address and is in the correct format.
+ *
+ * The function parses the given `uri` using the `TEZOS_STORAGE_REGEX` regular expression to extract the contract address and optional path.
+ * If the contract address is not present in the URI, it uses the provided `defaultAddress`.
+ * Throws an error if the URI is invalid or if no contract address can be determined.
+ *
+ * @param uri - The Tezos storage URI to normalize.
+ * @param defaultAddress - An optional default contract address to use if the URI does not contain one.
+ * @returns The normalized Tezos storage URI in the format `tezos-storage://<contractAddress>[/<path>]`.
+ * @throws Will throw an error if the URI is invalid or if no contract address is found.
+ */
+export function normalizeTezosUri(uri: string, defaultAddress?: string): string {
+  const match: RegExpExecArray | null = TEZOS_STORAGE_REGEX.exec(uri);
+  assert(match, `Invalid Tezos storage URI: ${uri}`);
 
-  let curr: unknown = data['metadata'];
-  for (const segment of pathSegments) {
-    if (curr instanceof BigMapAbstraction) {
-      const michelsonMap: MichelsonMap<MichelsonMapKey, unknown> = await curr.getMultipleValues([segment]);
-      michelsonMap.setType(curr['schema'].val);
-      curr = (await unwrapMichelsonMap(michelsonMap))[segment];
-    } else if (MichelsonMap.isMichelsonMap(curr)) {
-      curr = curr.get(segment);
-    } else if (typeof curr === 'object' && isDefined(curr) && segment in curr) {
-      curr = (curr as { [segment]: unknown })[segment];
-    } else {
-      throw new Error(`Invalid path segment '${segment}' in Tezos storage URI`);
-    }
+  const [, address, path] = match;
+  const contractAddress: string | undefined = address || defaultAddress;
+  assert(contractAddress !== undefined, `No contract address found in URI or default: ${uri}`);
+
+  let normalizedUri = `tezos-storage://${contractAddress}`;
+  if (path) {
+    normalizedUri += `/${path}`;
   }
 
-  return curr;
+  return normalizedUri;
 }
 
 /**
@@ -54,24 +61,29 @@ async function findDataInStorage(data: { metadata?: unknown }, segments: string[
  * @returns A promise that resolves to the requested data from the contract's storage.
  * @throws If the URI is invalid or a contract address cannot be determined.
  */
-export async function getFromTezos<T = unknown>(uri: string, defaultAddress?: string): Promise<T> {
-  const match = TEZOS_STORAGE_REGEX.exec(uri);
+export async function getFromTezos<T>(uri: string): Promise<T | undefined> {
+  const match: RegExpExecArray | undefined = TEZOS_STORAGE_REGEX.exec(uri) ?? undefined;
   assert(match, `Invalid Tezos storage URI: ${uri}`);
 
   const [, address, path] = match;
-  const contractAddress: string | undefined = address || defaultAddress;
-  assert(contractAddress !== undefined, `No contract address found in URI or default: ${uri}`);
+  assert(address !== undefined, `No contract address found in URI or default: ${uri}`);
 
-  const contract: ContractAbstraction<ContractProvider> = await Tezos().contract.at(contractAddress);
-  const storage: { metadata?: unknown } = await contract.storage();
-  assert(storage['metadata'], `No 'metadata' field found in contract storage: ${contractAddress}`);
+  const storage: Storage | undefined = await getStorage(address);
+  const bigMap: BigMap | undefined = await storage?.getValue<BigMap>('metadata');
 
-  const pathSegments: string[] = path ? path.split('%2F') : [];
-  const final: unknown = await findDataInStorage(storage, pathSegments);
-
-  if (typeof final === 'string' && isJson(final)) {
-    return JSON.parse(final) as T;
+  let curr: unknown = bigMap;
+  const segments: string[] = path ? path.split('%2F') : [];
+  for (const segment of segments) {
+    if (curr instanceof Storage || curr instanceof BigMap) {
+      curr = await curr.getValue(segment);
+    } else if (MichelsonMap.isMichelsonMap(curr)) {
+      curr = curr.get(segment);
+    } else if (curr !== null && typeof curr === 'object' && segment in curr) {
+      curr = (curr as { [key: string]: unknown })[segment];
+    } else {
+      throw new Error(`Invalid path segment '${segment}' in Tezos storage URI`);
+    }
   }
 
-  return final as T;
+  return curr as T;
 }

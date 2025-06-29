@@ -1,17 +1,5 @@
 import { unwrapMichelsonMap } from '@/index';
 import { MichelsonMap } from '@taquito/michelson-encoder';
-// import { isIpfsLink, getFromIpfs } from '@/network/ipfs';
-// const { isTezosLink, getFromTezos } = require('@/index');
-
-// // Mock dependencies
-// jest.mock('@/network/ipfs', () => ({
-//   isIpfsLink: jest.fn().mockImplementation(jest.requireActual('@/network/ipfs').isIpfsLink),
-//   getFromIpfs: jest.fn(),
-// }));
-// jest.mock('@/index', () => ({
-//   isTezosLink: jest.fn(),
-//   getFromTezos: jest.fn(),
-// }));
 
 describe('unwrapMichelsonMap', () => {
   it('should unwrap a simple MichelsonMap to a plain object', async () => {

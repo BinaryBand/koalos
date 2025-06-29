@@ -1,7 +1,0 @@
-{
-  "name": "PLENTY",
-  "description": "Plenty DeFi DAO",
-  "authors": ["Plenty DeFi DAO"],
-  "homepage": "https://plentydefi.com",
-  "interfaces": ["TZIP-007-2021-04-17", "TZIP-016-2021-04-17"]
-}

@@ -1,113 +1,7 @@
-import { decodeMichelsonValue, unwrapMichelsonMap } from '@/tezos/michelson';
-import { MichelsonMap, Schema, Token } from '@taquito/michelson-encoder';
-import { BigMapResponse, ScriptedContracts } from '@taquito/rpc';
-import { isIpfsLink, getFromIpfs } from '@/network/ipfs';
-import { isTezosLink, getFromTezos } from '@/network/tezos';
-import { TezosRpc } from '@/tezos/provider';
-import { toExpr } from '@/tezos/encoders';
-import { isJson } from '@/tools/utils';
-
-type TokenMetadataStorage = {
-  token_metadata?: string;
-  assets?: { token_metadata?: string };
-};
-
-type TokenMetadata = {
-  token_info?: MichelsonMap<string, unknown> | TZip21TokenMetadata;
-  1?: MichelsonMap<string, unknown> | TZip21TokenMetadata;
-};
-
-function cleanString(input: string): string {
-  // Regular expression to match non-printable characters
-  return input.replace(/[\x00-\x1F\x7F]/g, '');
-}
-
-function getBigMapToken(contractSchema: Schema, bigMapKey: string): Token | undefined {
-  return contractSchema.findToken('big_map').filter((t): boolean => t.annot() === bigMapKey)[0];
-}
-
-function getBigMapSchema(contractSchema: Schema, bigMapKey: string): Schema | undefined {
-  const token: Token | undefined = getBigMapToken(contractSchema, bigMapKey);
-  const michelson: MichelsonExpression | undefined = token?.tokenVal.args?.[1];
-  return michelson ? new Schema(michelson) : undefined;
-}
-
-async function getBigMapResponse(id: string, bigMapKey: Primitive): Promise<MichelsonExpression | undefined> {
-  try {
-    const expr: string = toExpr(bigMapKey);
-    return TezosRpc()
-      .getBigMapExpr(id, expr)
-      .catch(() => undefined);
-  } catch {
-    return undefined;
-  }
-}
-
-async function getBigMapValue<T>(
-  id: string,
-  key: Primitive,
-  schema?: Schema,
-  address?: string
-): Promise<T | undefined> {
-  const bigMapResponse: BigMapResponse | undefined = await getBigMapResponse(id, key);
-  if (bigMapResponse === undefined) return undefined;
-
-  const rawValue: unknown = schema?.Execute(bigMapResponse);
-  const final: unknown = decodeMichelsonValue(rawValue, schema);
-
-  if (typeof final === 'string') {
-    return resolvePossibleLink<T>(final, address) ?? final;
-  }
-
-  return final as T;
-}
-
-async function resolvePossibleLink<T = unknown>(value: string, contractAddress?: string): Promise<T> {
-  value = cleanString(value);
-
-  if (isIpfsLink(value)) {
-    return getFromIpfs<T>(value);
-  } else if (isTezosLink(value)) {
-    return getFromTezos<T>(value, contractAddress);
-  }
-
-  if (isJson(value)) {
-    return JSON.parse(value);
-  }
-
-  return value as T;
-}
-
-/**
- * Retrieves and unwraps the TZIP-17 metadata for a given smart contract.
- *
- * This function fetches the contract's storage, accesses the metadata big map,
- * retrieves multiple standard TZIP-16 metadata fields, and, if the result is a MichelsonMap,
- * applies the schema and unwraps the map into a strongly-typed TZip17Metadata object.
- *
- * @param address - The contract abstraction instance to fetch metadata from.
- * @returns A promise that resolves to the unwrapped TZip17Metadata object if available, or `undefined` otherwise.
- */
-export async function getMetadata(address: string): Promise<TZip17Metadata | undefined> {
-  const script: ScriptedContracts = await TezosRpc().getScript(address);
-  const contractSchema: Schema = Schema.fromRPCResponse({ script });
-  const storageResponse: { metadata?: string } = contractSchema.Execute(script.storage);
-
-  const bigMapId: string | undefined = storageResponse.metadata;
-  if (!bigMapId) return undefined;
-
-  const metadataSchema: Schema | undefined = getBigMapSchema(contractSchema, 'metadata');
-  const final: TZip17Metadata | undefined = await getBigMapValue<TZip17Metadata>(bigMapId, '', metadataSchema, address);
-  if (final) return final;
-
-  const [name, description, version] = await Promise.all([
-    getBigMapValue<string>(bigMapId, 'name', metadataSchema),
-    getBigMapValue<string>(bigMapId, 'description', metadataSchema),
-    getBigMapValue<string>(bigMapId, 'version', metadataSchema),
-  ]);
-
-  return { name, description, version } as TZip17Metadata;
-}
+import { MichelsonMap } from '@taquito/michelson-encoder';
+import { unwrapMichelsonMap } from '@/tezos/michelson';
+import { getStorage, Storage } from '@/tezos/storage';
+import { BigMap } from '@/tezos/storage';
 
 /**
  * Retrieves the metadata for a specific token from a smart contract.
@@ -122,27 +16,44 @@ export async function getMetadata(address: string): Promise<TZip17Metadata | und
  * @returns A promise that resolves to the token metadata in TZip21 format, or `undefined` if not found.
  */
 export async function getTokenMetadata(address: string, tokenId: number = 0): Promise<TZip21TokenMetadata | undefined> {
-  const script: ScriptedContracts = await TezosRpc().getScript(address);
-  const contractSchema: Schema = Schema.fromRPCResponse({ script });
-  const storageResponse: TokenMetadataStorage = contractSchema.Execute(script.storage);
+  const storage: Storage | undefined = await getStorage(address);
+  const bigMap: BigMap | undefined = await storage?.getValue<BigMap>('token_metadata');
 
-  const bigMapId: string | undefined = storageResponse.token_metadata ?? storageResponse.assets?.token_metadata;
-  if (!bigMapId) return undefined;
-
-  const tokenMetadataSchema: Schema | undefined = getBigMapSchema(contractSchema, 'token_metadata');
-  const final: TokenMetadata | undefined = await getBigMapValue<TokenMetadata>(
-    bigMapId,
-    tokenId,
-    tokenMetadataSchema,
-    address
-  );
-
-  const tokenInfo: MichelsonMap<string, unknown> | TZip21TokenMetadata | undefined =
-    final?.['token_info'] ?? final?.['1'];
+  const tokenMetadata: TokenMetadata | undefined = await bigMap?.getValue(tokenId);
+  const tokenInfo: unknown = tokenMetadata?.['token_info'] ?? tokenMetadata?.['1'];
 
   if (MichelsonMap.isMichelsonMap(tokenInfo)) {
     return unwrapMichelsonMap<TZip21TokenMetadata>(tokenInfo);
   }
 
-  return tokenInfo;
+  return tokenInfo as TZip21TokenMetadata;
+}
+
+/**
+ * Retrieves and unwraps the TZIP-17 metadata for a given smart contract.
+ *
+ * This function fetches the contract's storage, accesses the metadata big map,
+ * retrieves multiple standard TZIP-16 metadata fields, and, if the result is a MichelsonMap,
+ * applies the schema and unwraps the map into a strongly-typed TZip17Metadata object.
+ *
+ * @param address - The contract abstraction instance to fetch metadata from.
+ * @returns A promise that resolves to the unwrapped TZip17Metadata object if available, or `undefined` otherwise.
+ */
+export async function getMetadata(address: string): Promise<TZip17Metadata | undefined> {
+  const storage: Storage | undefined = await getStorage(address);
+  const bigMap: BigMap | undefined = await storage?.getValue<BigMap>('metadata');
+
+  const final: TZip17Metadata | undefined = await bigMap?.getValue<TZip17Metadata>('');
+  if (final !== undefined) {
+    return final;
+  }
+
+  // If the metadata is not a MichelsonMap, we try to access the standard fields directly
+  const [name, description, version] = await Promise.all([
+    bigMap?.getValue<string>('name'),
+    bigMap?.getValue<string>('description'),
+    bigMap?.getValue<string>('version'),
+  ]);
+
+  return { name, description, version } as TZip17Metadata;
 }

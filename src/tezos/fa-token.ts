@@ -1,7 +1,7 @@
 import { ForgeParams, OpKind, ParamsWithKind, TransferParams, UnitValue } from '@taquito/taquito';
 import { OperationContents } from '@taquito/rpc';
 
-import { applyEstimates } from '@/tezos/transaction';
+import { applyEstimates } from '@/tezos/operations';
 import Tezos, { TezosRpc } from '@/tezos/provider';
 import { assert } from '@/tools/utils';
 
@@ -24,29 +24,40 @@ export async function getFaContract<T extends FA = FA>(address: string): Promise
   return Tezos().contract.at<T>(address);
 }
 
-/**
- * Retrieves the balance of a given token for a specified address.
- *
- * Supports both FA1.2 and FA2 token standards. For FA1.2 tokens, it calls the `getBalance` view.
- * For FA2 tokens, it calls the `balance_of` view with the provided `tokenId`.
- *
- * @param token - The token contract instance, expected to conform to either FA1.2 or FA2 interface.
- * @param address - The address whose token balance is to be retrieved.
- * @param tokenId - (Optional) The token ID for FA2 tokens. Defaults to 0.
- * @returns A promise that resolves to the balance as a `BigNumber`.
- * @throws If the token does not support a balance view.
- */
-export async function getTokenBalance(token: FA, address: string, tokenId = 0): Promise<BigNumber> {
-  if (isFA12(token)) {
-    return token.views.getBalance(address).read();
+export async function getTokenBalance(owner: string, contractAddress: string, tokenId: number = 0): Promise<BigNumber> {
+  const tokenContract: FA = await getFaContract(contractAddress);
+  if (isFA12(tokenContract)) {
+    return tokenContract.views.getBalance(owner).read();
   }
-
-  if (isFA2(token)) {
-    return token.views.balance_of([{ owner: address, token_id: tokenId }]).read();
+  if (isFA2(tokenContract)) {
+    return tokenContract.views.balance_of([{ owner, token_id: tokenId }]).read();
   }
-
   throw new Error('Token does not have a balance view');
 }
+
+// /**
+//  * Retrieves the balance of a given token for a specified address.
+//  *
+//  * Supports both FA1.2 and FA2 token standards. For FA1.2 tokens, it calls the `getBalance` view.
+//  * For FA2 tokens, it calls the `balance_of` view with the provided `tokenId`.
+//  *
+//  * @param token - The token contract instance, expected to conform to either FA1.2 or FA2 interface.
+//  * @param address - The address whose token balance is to be retrieved.
+//  * @param tokenId - (Optional) The token ID for FA2 tokens. Defaults to 0.
+//  * @returns A promise that resolves to the balance as a `BigNumber`.
+//  * @throws If the token does not support a balance view.
+//  */
+// export async function getTokenBalance(token: FA, address: string, tokenId: number = 0): Promise<BigNumber> {
+//   if (isFA12(token)) {
+//     return token.views.getBalance(address).read();
+//   }
+
+//   if (isFA2(token)) {
+//     return token.views.balance_of([{ owner: address, token_id: tokenId }]).read();
+//   }
+
+//   throw new Error('Token does not have a balance view');
+// }
 
 /**
  * Retrieves the total supply of an FA1.2 token.

@@ -5,7 +5,6 @@ type OracleData = {
 type WalletData = {
   address: string;
   balance: number;
-  domain: string | undefined;
 };
 
 type TezosRecipient = {

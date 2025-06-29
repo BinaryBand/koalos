@@ -1,4 +1,5 @@
 import { MichelsonMap, MichelsonMapKey, Schema } from '@taquito/michelson-encoder';
+import { BigNumber } from 'bignumber.js';
 import { assert } from '@/tools/utils';
 
 /**
@@ -17,25 +18,25 @@ import { assert } from '@/tools/utils';
  * @param schema - (Optional) The schema used to encode and decode the value.
  * @returns The decoded value, or the original value if decoding is not possible.
  */
-export function decodeMichelsonValue(value: unknown, schema?: Schema): unknown {
-  if (schema) {
+export function decodeMichelsonValue<T>(value: unknown, schema?: Schema): T | undefined {
+  if (schema !== undefined) {
     const michelson: MichelsonExpressionBase = schema.Encode(value);
-    if ('bytes' in michelson && michelson.bytes) {
-      return Buffer.from(michelson.bytes, 'hex').toString('utf8');
-    } else if ('int' in michelson && michelson.int) {
-      const num: number = Number(michelson.int);
-      return !isNaN(num) ? num : value;
-    } else if ('string' in michelson && michelson.string) {
-      return michelson.string;
+    if ('bytes' in michelson) {
+      return Buffer.from(michelson.bytes, 'hex').toString('utf8') as T;
+    } else if ('int' in michelson) {
+      const num: BigNumber = new BigNumber(michelson.int);
+      return (num.isNaN() ? value : num) as T;
+    } else if ('string' in michelson) {
+      return michelson.string as T;
     }
 
     if (MichelsonMap.isMichelsonMap(value)) {
       value.setType(schema.val);
-      return unwrapMichelsonMap(value);
+      return unwrapMichelsonMap(value) as T;
     }
   }
 
-  return value;
+  return value as T;
 }
 
 /**
@@ -51,10 +52,10 @@ export function decodeMichelsonValue(value: unknown, schema?: Schema): unknown {
  * @param contractAddress - (Optional) The contract address, used for resolving TZIP-16 metadata if present.
  * @returns A promise that resolves to the unwrapped object of type `T`.
  */
-export async function unwrapMichelsonMap<T extends Record<string, unknown>>(
+export function unwrapMichelsonMap<T extends Record<string, unknown>>(
   michelsonMap: MichelsonMap<MichelsonMapKey, unknown>,
   contractAddress?: string
-): Promise<T> {
+): T {
   const result: Record<string, unknown> = {};
   const valueSchema: Schema | undefined = michelsonMap['valueSchema'];
 
@@ -64,7 +65,7 @@ export async function unwrapMichelsonMap<T extends Record<string, unknown>>(
 
     // Recursively unwrap nested maps or unpack primitive values
     if (MichelsonMap.isMichelsonMap(value)) {
-      result[key] = await unwrapMichelsonMap(value, contractAddress);
+      result[key] = unwrapMichelsonMap(value, contractAddress);
     } else if (valueSchema !== undefined) {
       result[key] = decodeMichelsonValue(value, valueSchema);
     } else {
