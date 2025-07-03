@@ -7,7 +7,7 @@ describe('unwrapMichelsonMap', () => {
     map.set('foo', 'bar');
     map.set('baz', 42);
 
-    const result: Record<string, unknown> = await unwrapMichelsonMap(map);
+    const result: Record<string, unknown> = unwrapMichelsonMap(map);
     expect(result).toEqual({ foo: 'bar', baz: 42 });
   });
 
@@ -17,38 +17,7 @@ describe('unwrapMichelsonMap', () => {
     map.set('baz', 0);
     map.set('bar', undefined);
 
-    const result = await unwrapMichelsonMap(map);
+    const result = unwrapMichelsonMap(map);
     expect(result).toEqual({ foo: null, baz: 0 });
   });
-
-  // it('should fetch and merge IPFS metadata if empty string key is an IPFS link', async () => {
-  //   const map = new MichelsonMap();
-  //   map.set('', 'ipfs://abc123');
-  //   map.set('other', 'value');
-
-  //   isIpfsLink.mockReturnValue(true);
-  //   getFromIpfs.mockResolvedValue('{"meta":"data"}');
-
-  //   const result = await unwrapMichelsonMap(map);
-  //   expect(isIpfsLink).toHaveBeenCalledWith('ipfs://abc123');
-  //   expect(getFromIpfs).toHaveBeenCalledWith('ipfs://abc123');
-  //   expect(result).toEqual({ other: 'value', meta: 'data' });
-  //   expect(result).not.toHaveProperty('');
-  // });
-
-  // it('should fetch and merge Tezos metadata if empty string key is a Tezos link', async () => {
-  //   const map = new MichelsonMap();
-  //   map.set('', 'tezos-storage:here');
-  //   map.set('foo', 1);
-
-  //   isIpfsLink.mockReturnValue(false);
-  //   isTezosLink.mockReturnValue(true);
-  //   getFromTezos.mockResolvedValue('{"hello":"world"}');
-
-  //   const result = await unwrapMichelsonMap(map, 'KT1...');
-  //   expect(isTezosLink).toHaveBeenCalledWith('tezos-storage:here');
-  //   expect(getFromTezos).toHaveBeenCalledWith('tezos-storage:here', 'KT1...');
-  //   expect(result).toEqual({ foo: 1, hello: 'world' });
-  //   expect(result).not.toHaveProperty('');
-  // });
 });

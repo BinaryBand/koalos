@@ -4,7 +4,6 @@ import {
   hasMetadataWithResult,
   isOpWithFee,
   isOpWithGasBuffer,
-  ParamsWithKind,
   PreparedOperation,
 } from '@taquito/taquito';
 import {
@@ -19,7 +18,7 @@ import { MergedOperationResult } from '@taquito/taquito/dist/types/operations/er
 import Tezos, { TezosRpc } from '@/tezos/provider';
 
 const OP_SIZE_REVEAL: number = 324; // injecting size tz1=320, tz2=322, tz3=322, tz4=420(not supported)
-const MILLIGAS_BUFFER: number = 100000; // 100 buffer depends on operation kind
+const MILLIGAS_BUFFER: number = 100000;
 const STORAGE_BUFFER: number = 20;
 
 function flattenOperationResult(results: PreapplyResponse[]): MergedOperationResult[] {
@@ -43,7 +42,7 @@ function flattenOperationResult(results: PreapplyResponse[]): MergedOperationRes
   return returnedResults;
 }
 
-export function getEstimationPropertiesFromOperationContent(
+function getEstimationContent(
   content: PreapplyResponse['contents'][0],
   opSize: number,
   costPerByte: number,
@@ -102,7 +101,7 @@ export function getEstimationPropertiesFromOperationContent(
   return estimate;
 }
 
-export async function calculateEstimates(op: PreparedOperation, constants: ConstantsResponse) {
+async function calculateEstimates(op: PreparedOperation, constants: ConstantsResponse) {
   const params: ForgeParams = Tezos().prepare.toForge(op);
   const opBytes: string = await new LocalForger().forge(params);
 
@@ -111,32 +110,23 @@ export async function calculateEstimates(op: PreparedOperation, constants: Const
     chain_id: await TezosRpc().getChainId(),
   };
 
-  const { contents } = await TezosRpc().simulateOperation(operation);
+  const results: PreapplyResponse = await TezosRpc().simulateOperation(operation);
   const { cost_per_byte, origination_size = 257 } = constants;
 
   let numberOfOps: number = 1;
   if (Array.isArray(op.opOb.contents) && op.opOb.contents.length > 1) {
-    numberOfOps = contents[0]!.kind === 'reveal' ? op.opOb.contents.length - 1 : op.opOb.contents.length;
+    numberOfOps = results.contents[0]!.kind === 'reveal' ? op.opOb.contents.length - 1 : op.opOb.contents.length;
   }
 
-  return contents.map((contents: OperationContentsAndResult) => {
+  return results.contents.map((contents: OperationContentsAndResult) => {
     // diff between estimated and injecting OP_SIZE is 124-126, we added buffer to use 130
     const size: number = contents.kind === 'reveal' ? OP_SIZE_REVEAL / 2 : (opBytes.length + 130) / 2 / numberOfOps;
-
-    return getEstimationPropertiesFromOperationContent(contents, size, cost_per_byte.toNumber(), origination_size);
+    return getEstimationContent(contents, size, cost_per_byte.toNumber(), origination_size);
   });
 }
 
-export async function estimateBatch(params: ParamsWithKind[]) {
-  let pkh: string = undefined!;
-  params.forEach((param) => {
-    if ('source' in param) {
-      pkh = param.source;
-    }
-  });
-
+export async function estimateBatch(preparedOperation: PreparedOperation): Promise<Estimate[]> {
   const protocolConstants: ConstantsResponse = await TezosRpc().getConstants();
-  const preparedOperation: PreparedOperation = await Tezos(pkh).prepare.batch(params);
   const estimateProperties: EstimateProperties[] = await calculateEstimates(preparedOperation, protocolConstants);
   return Estimate.createArrayEstimateInstancesFromProperties(estimateProperties);
 }

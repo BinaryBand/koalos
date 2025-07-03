@@ -1,39 +1,45 @@
-import 'dotenv/config';
-
 import {
-  Estimate,
-  EstimateProperties,
-  ParamsWithKind,
-  PreparedOperation,
-  RevealParams,
-  RPCOperation,
-  RPCOpWithSource,
-  TezosToolkit,
-} from '@taquito/taquito';
-import { ConstantsResponse, ContractResponse, ScriptResponse, BigMapResponse, RpcClient } from '@taquito/rpc';
+  ContractResponse,
+  ScriptResponse,
+  BigMapResponse,
+  RpcClient,
+  RPCOptions,
+  RPCSimulateOperationParam,
+  OperationContents,
+  RPCRunViewParam,
+} from '@taquito/rpc';
 import { HttpBackend } from '@taquito/http-utils';
+import { Schema } from '@taquito/michelson-encoder';
 import { BigNumber } from 'bignumber.js';
 import path from 'path';
 import qs from 'qs';
 
-import { fetchAndCache } from '@/tools/cache';
-
 import CONSTANTS from '@public/chain/constants.json';
+import CONST_META from '@public/chain/constants.meta.json';
 import PROTOCOLS from '@public/chain/protocols.json';
 import RPC_URLS from '@public/constants/rpc-providers.json';
 
-import { calculateEstimates, estimateBatch } from '@/tezos/taquito-mirror/estimate';
-import {
-  adjustGasForBatchOperation,
-  getRPCOp,
-  getOperationLimits,
-  getSource,
-  mergeLimits,
-  prepareBatch,
-} from '@/tezos/taquito-mirror/prepare';
-import { FakeSigner } from '@/tezos/provider';
+import { fetchAndCache } from '@/tools/cache';
+import { assert } from '@/tools/utils';
 
+const BLOCK_DELAY: number = BigNumber(CONSTANTS.minimal_block_delay).toNumber() * 1000; // In seconds
+const BLOCKS_PER_CYCLE: number = BigNumber(CONSTANTS.blocks_per_cycle).toNumber();
 const CACHE_DIRECTORY: string = path.join(__dirname, 'tests', 'cache');
+
+const FA2_BALANCE_RESPONSE_SCHEMA: MichelsonExpression = {
+  prim: 'pair',
+  args: [
+    {
+      prim: 'pair',
+      args: [
+        { prim: 'address', annots: ['%owner'] },
+        { prim: 'nat', annots: ['%token_id'] },
+      ],
+      annots: ['%request'],
+    },
+    { prim: 'nat', annots: ['%balance'] },
+  ],
+};
 
 jest.mock('@/network/ipfs', () => ({
   ...jest.requireActual('@/network/ipfs'),
@@ -51,147 +57,102 @@ jest.mock('@/network/ipfs', () => ({
   }),
 }));
 
-jest.mock('@taquito/taquito', () => {
-  const actualTaquito = jest.requireActual('@taquito/taquito');
-
-  const tezosToolkit = jest.fn().mockImplementation((args) => {
-    const instance: TezosToolkit = new actualTaquito.TezosToolkit(args);
-    const controlInstance: TezosToolkit = new actualTaquito.TezosToolkit(args);
-
-    (instance.prepare as any).mergeLimits = jest
-      .fn()
-      .mockImplementation((userDefinedLimit: Limits, defaultLimits: Required<Limits>) => {
-        const mergedLimits: Required<Limits> = mergeLimits(userDefinedLimit, defaultLimits);
-        const controlMergedLimits = (controlInstance.prepare as any).mergeLimits(userDefinedLimit, defaultLimits);
-        expect(mergedLimits).toEqual(controlMergedLimits);
-        return mergedLimits;
-      });
-
-    (instance.prepare as any).adjustGasForBatchOperation = jest
-      .fn()
-      .mockImplementation((gasLimitBlock: BigNumber, gaslimitOp: BigNumber, numberOfOps: number) => {
-        const adjustedGas: BigNumber = adjustGasForBatchOperation(gasLimitBlock, gaslimitOp, numberOfOps);
-        const controlAdjustedGas = (controlInstance.prepare as any).adjustGasForBatchOperation(
-          gasLimitBlock,
-          gaslimitOp,
-          numberOfOps
-        );
-        expect(adjustedGas).toEqual(controlAdjustedGas);
-        return adjustedGas;
-      });
-
-    (instance.prepare as any).getOperationLimits = jest
-      .fn()
-      .mockImplementation(async (constants: ConstantsResponse, numberOfOps?: number) => {
-        const limits: RevealParams = await getOperationLimits(constants, numberOfOps);
-        const controlLimits = await (controlInstance.prepare as any).getOperationLimits(constants, numberOfOps);
-        expect(limits).toEqual(controlLimits);
-        return limits;
-      });
-
-    (instance.prepare as any).getSource = jest
-      .fn()
-      .mockImplementation((op: RPCOpWithSource, pkh: string, _source?: string) => {
-        const source = getSource(op, pkh, _source);
-        const controlSource = (controlInstance.prepare as any).getSource(op, pkh, _source);
-        expect(source).toEqual(controlSource);
-        return source;
-      });
-
-    (instance.prepare as any).getRPCOp = jest.fn().mockImplementation(async (param: ParamsWithKind) => {
-      const test: RPCOperation = await getRPCOp(param);
-      const control: RPCOperation = await (controlInstance.prepare as any).getRPCOp(param);
-      expect(test).toEqual(control);
-      return test;
-    });
-
-    instance.prepare.batch = jest.fn().mockImplementation(async (batchParams: ParamsWithKind[]) => {
-      const fakeSigner: FakeSigner = new FakeSigner(process.env['ADDRESS']!);
-      controlInstance.setProvider({ signer: fakeSigner });
-
-      const batch: PreparedOperation = await prepareBatch(batchParams, instance.prepare);
-      const controlBatch = await controlInstance.prepare.batch(batchParams);
-      expect(batch).toEqual(controlBatch);
-      return batch;
-    });
-
-    instance.estimate.batch = jest.fn().mockImplementation(async (params: ParamsWithKind[]) => {
-      const fakeSigner: FakeSigner = new FakeSigner(process.env['ADDRESS']!);
-      controlInstance.setProvider({ signer: fakeSigner });
-
-      const estimates: Estimate[] = await estimateBatch(params);
-      const controlEstimates: Estimate[] = await controlInstance.estimate.batch(params);
-      expect(estimates).toEqual(controlEstimates);
-      return estimates;
-    });
-
-    (instance.estimate as any).calculateEstimates = jest
-      .fn()
-      .mockImplementation(async (op: PreparedOperation, constants: ConstantsResponse) => {
-        const estimateProperties: EstimateProperties[] = await calculateEstimates(op, constants);
-        const controlProperties = await (controlInstance.estimate as any).calculateEstimates(op, constants);
-        expect(estimateProperties).toEqual(controlProperties);
-        return estimateProperties;
-      });
-
-    return {
-      estimate: instance.estimate,
-      rpc: instance.rpc,
-      prepare: instance.prepare,
-      setProvider: instance.setProvider.bind(instance),
-    };
-  });
-
-  return { ...actualTaquito, TezosToolkit: tezosToolkit };
-});
-
 jest.mock('@taquito/rpc', () => {
-  const actualRpc = jest.requireActual('@taquito/rpc');
+  const { castToBigNumber, ...actualRpc } = jest.requireActual('@taquito/rpc');
 
   const mockRpcClient = jest.fn().mockImplementation((url: string, chain?: string, httpBackend?: HttpBackend) => {
     const instance: RpcClient = new actualRpc.RpcClient(url, chain, httpBackend);
 
     instance.getRpcUrl = jest.fn().mockImplementation(() => RPC_URLS[Math.floor(Math.random() * RPC_URLS.length)]);
-    instance.getProtocols = jest.fn().mockImplementation(() => PROTOCOLS);
+    instance.getProtocols = jest.fn().mockReturnValue(PROTOCOLS);
     instance.getChainId = jest.fn().mockReturnValue('NetXdQprcVkpaWU');
-    instance.getManagerKey = jest.fn().mockReturnValue(process.env['PUBLIC_KEY']);
+    instance.getConstants = jest.fn().mockReturnValue({ ...CONSTANTS, ...castToBigNumber(CONSTANTS, CONST_META) });
 
-    instance.getConstants = jest.fn().mockImplementation(() => {
-      const numberKeys: string[] = ['cost_per_byte', 'hard_gas_limit_per_block', 'hard_storage_limit_per_operation'];
-      const castedResponse: ConstantsResponse = actualRpc.castToBigNumber(CONSTANTS, numberKeys);
-      return { ...CONSTANTS, ...castedResponse };
+    instance.getBlockHeader = jest.fn().mockImplementation(async (options?: RPCOptions) => {
+      const key: string = `block_${options?.block ?? 'head'}`;
+      const callback = actualRpc.RpcClient.prototype.getBlockHeader.bind(instance, options);
+      const expiry: Date = new Date(Date.now() + BLOCK_DELAY);
+      return fetchAndCache(key, callback, CACHE_DIRECTORY, expiry);
     });
 
-    instance.getContract = jest.fn().mockImplementation(async (address: string) => {
-      const constants: ConstantsResponse = await instance.getConstants();
-      const blockDelay: number = new BigNumber(constants.minimal_block_delay ?? 8).toNumber(); // In seconds
+    instance.getBlockHash = jest.fn().mockImplementation(async (options?: RPCOptions) => {
+      return (await instance.getBlockHeader(options)).hash;
+    });
 
+    instance.getManagerKey = jest.fn().mockImplementation(async (address: string, options?: RPCOptions) => {
+      const key: string = `manager_key_${address.slice(-5)}`;
+      const callback = actualRpc.RpcClient.prototype.getManagerKey.bind(instance, address, options);
+      return fetchAndCache(key, callback, CACHE_DIRECTORY);
+    });
+
+    instance.getContract = jest.fn().mockImplementation(async (address: string, options?: RPCOptions) => {
       const key: string = `contract_${address.slice(-5)}`;
-      const callback = actualRpc.RpcClient.prototype.getContract.bind(instance, address);
-      const expiry: Date = new Date(Date.now() + 1000 * blockDelay); // Cache for one block delay
+      const callback = actualRpc.RpcClient.prototype.getContract.bind(instance, address, options);
+      const expiry: Date = new Date(Date.now() + BLOCK_DELAY);
       return fetchAndCache<ContractResponse>(key, callback, CACHE_DIRECTORY, expiry);
     });
 
-    instance.getScript = jest.fn().mockImplementation(async (address: string) => {
-      const constants: ConstantsResponse = await instance.getConstants();
-      const blockDelay: number = new BigNumber(constants.minimal_block_delay ?? 8).toNumber();
-      const blockPerCycle: number = new BigNumber(constants.blocks_per_cycle ?? 10800).toNumber();
-
+    instance.getScript = jest.fn().mockImplementation(async (address: string, options?: RPCOptions) => {
       const key: string = `script_${address.slice(-5)}`;
-      const callback = actualRpc.RpcClient.prototype.getScript.bind(instance, address);
-      const expiry: Date = new Date(Date.now() + 1000 * blockDelay * blockPerCycle); // Cache for one cycle
+      const callback = actualRpc.RpcClient.prototype.getScript.bind(instance, address, options);
+      const expiry: Date = new Date(Date.now() + BLOCK_DELAY * BLOCKS_PER_CYCLE);
       return fetchAndCache<ScriptResponse>(key, callback, CACHE_DIRECTORY, expiry);
     });
 
-    instance.getBigMapExpr = jest.fn().mockImplementation(async (id: string, expr: string) => {
-      const constants: ConstantsResponse = await instance.getConstants();
-      const blockDelay: number = new BigNumber(constants.minimal_block_delay ?? 8).toNumber();
-      const blockPerCycle: number = new BigNumber(constants.blocks_per_cycle ?? 10800).toNumber();
+    instance.getEntrypoints = jest.fn().mockImplementation(async (address: string, options?: RPCOptions) => {
+      const key: string = `entrypoints_${address.slice(-5)}`;
+      const callback = actualRpc.RpcClient.prototype.getEntrypoints.bind(instance, address, options);
+      const expiry: Date = new Date(Date.now() + BLOCK_DELAY * BLOCKS_PER_CYCLE);
+      return fetchAndCache<Record<string, string>>(key, callback, CACHE_DIRECTORY, expiry);
+    });
 
+    instance.getBigMapExpr = jest.fn().mockImplementation(async (id: string, expr: string, options?: RPCOptions) => {
       const key: string = `bigMap_${id}_${expr.slice(-5)}`;
-      const callback = actualRpc.RpcClient.prototype.getBigMapExpr.bind(instance, id, expr);
-      const expiry: Date = new Date(Date.now() + 1000 * blockDelay * blockPerCycle);
+      const callback = actualRpc.RpcClient.prototype.getBigMapExpr.bind(instance, id, expr, options);
+      const expiry: Date = new Date(Date.now() + BLOCK_DELAY * BLOCKS_PER_CYCLE);
       return fetchAndCache<BigMapResponse>(key, callback, CACHE_DIRECTORY, expiry);
+    });
+
+    instance.simulateOperation = jest.fn().mockImplementation(async (op: RPCSimulateOperationParam) => ({
+      contents: op.operation.contents!.map((content: OperationContents) => ({
+        ...content,
+        metadata: { operation_result: { consumed_milligas: 128 } },
+      })),
+    }));
+
+    instance.runView = jest.fn().mockImplementation(async (params: RPCRunViewParam, options?: RPCOptions) => {
+      const { contract, entrypoint, input } = params;
+
+      const calculateMockBalance = (seed: BigNumber.Value): BigNumber => {
+        return BigNumber(seed).plus(7).pow(contract.charCodeAt(11), 13).multipliedBy(1000);
+      };
+
+      if (entrypoint === 'getBalance') {
+        assert(typeof input === 'object' && 'string' in input, 'Input must be an object for getBalance view');
+        const balance: BigNumber = calculateMockBalance(contract.charCodeAt(5) + input.string.charCodeAt(17));
+        return { data: { int: balance.toString() } };
+      }
+
+      if (entrypoint === 'balance_of') {
+        assert(Array.isArray(input), 'Input must be an array for balance_of view');
+
+        const fa2BalanceSchema: Schema = new Schema(FA2_BALANCE_RESPONSE_SCHEMA);
+        const requestSchema: Schema = new Schema({
+          prim: 'pair',
+          args: [{ prim: 'address' }, { prim: 'nat' }],
+        });
+
+        const mockBalance: MichelsonExpression[] = input.map((michelson: MichelsonExpression) => {
+          const [owner, tokenId] = Object.values(requestSchema.Execute(michelson)) as [string, string];
+          const token_id: [BigNumber] = [BigNumber(tokenId)];
+          const balance: BigNumber = calculateMockBalance(token_id[0].plus(owner.charCodeAt(11)));
+          return fa2BalanceSchema.Encode({ request: { owner, token_id }, balance });
+        });
+
+        return { data: mockBalance };
+      }
+
+      return actualRpc.RpcClient.prototype.runView.call(instance, params, options);
     });
 
     return instance;
@@ -209,18 +170,18 @@ jest.mock('@taquito/http-utils', () => ({
         .mockImplementation(
           async ({ url, method = 'GET', query, headers, json = true }: HttpRequestOptions, data?: object | string) => {
             console.log('Request:', url);
-            const response: Response = await fetch(url + qs.stringify(query), {
-              keepalive: false,
-              method,
-              headers: headers ?? { ['Content-Type']: 'application/json' },
-              body: JSON.stringify(data),
-            });
 
-            if (response.status === 404) {
+            const keepalive: boolean = false;
+            url += qs.stringify(query);
+            headers ??= { ['Content-Type']: 'application/json' };
+            const body: string = JSON.stringify(data);
+            const res: Response = await fetch(url, { keepalive, method, headers, body });
+
+            if (res.status === 404) {
               return undefined;
             }
 
-            return json ? response.json() : response.text();
+            return json ? res.json() : res.text();
           }
         ),
     };

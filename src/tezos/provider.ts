@@ -1,24 +1,9 @@
-// import { MichelCodecPacker, TezosToolkit, Signer } from '@taquito/taquito';
 import { TezosToolkit, Signer } from '@taquito/taquito';
 import { BigMapResponse, RpcClientInterface, ScriptResponse } from '@taquito/rpc';
 
-import { publicKey, signature } from '@public/constants/stub-keys.json';
+import { publicKey, address as pkh, signature } from '@public/constants/stub-values.json';
 import RPC_URLS from '@public/constants/rpc-providers.json';
 import { toExpr } from '@/tezos/codec';
-
-/**
- * A mock implementation of the `Signer` interface for estimating operation fees.
- *
- * The `FakeSigner` class simulates signing operations without performing any real cryptographic actions.
- * It returns placeholder values for signature-related methods and exposes the provided address as the public key hash.
- */
-export class FakeSigner implements Signer {
-  constructor(private address: string) {}
-  public sign = async (sbytes: string) => ({ bytes: '', sig: '', prefixSig: signature, sbytes });
-  public secretKey = async () => undefined;
-  public publicKey = async () => publicKey;
-  public publicKeyHash = async () => this.address;
-}
 
 const TaquitoInstances: TezosToolkit[] = RPC_URLS.map((rpc: string) => new TezosToolkit(rpc));
 
@@ -31,11 +16,14 @@ export default function Tezos(address?: string): TezosToolkit {
   const randomIndex: number = Math.floor(Math.random() * TaquitoInstances.length);
   const tezos: TezosToolkit = TaquitoInstances[randomIndex]!;
 
-  if (address !== undefined) {
-    const fakeSigner: FakeSigner = new FakeSigner(address);
-    tezos.setProvider({ signer: fakeSigner });
-  }
+  const forgerer: Signer = {
+    secretKey: undefined!,
+    publicKey: async () => publicKey,
+    publicKeyHash: async () => address ?? pkh,
+    sign: async () => ({ bytes: undefined!, sig: signature, prefixSig: signature, sbytes: undefined! }),
+  };
 
+  tezos.setSignerProvider(forgerer);
   return tezos;
 }
 

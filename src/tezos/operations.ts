@@ -1,45 +1,51 @@
-import { Estimate, ParamsWithKind } from '@taquito/taquito';
-import { OperationContents, OperationHash, OpKind } from '@taquito/rpc';
+import { Estimate, ParamsWithKind, PreparedOperation, withKind } from '@taquito/taquito';
+import { OperationHash, OpKind } from '@taquito/rpc';
 import { LocalForger } from '@taquito/local-forging';
 import { blake2b } from '@noble/hashes/blake2';
 
-import Tezos, { TezosRpc } from '@/tezos/provider';
+import { prepareBatch } from '@/tezos/taquito-mirror/prepare';
+import { estimateBatch } from '@/tezos/taquito-mirror/estimate';
+import { TezosRpc } from '@/tezos/provider';
 import { assert } from '@/tools/utils';
 
-function zip<T, U>(arr1: T[], arr2: U[]): [T, U][] {
-  return arr1.map((item, index) => [item, arr2[index]] as [T, U]);
+export function createTransaction(
+  source: string,
+  to: string,
+  amount: number
+): withKind<ParamsWithKind, OpKind.TRANSACTION> {
+  return { kind: OpKind.TRANSACTION, source, to, amount };
 }
 
 /**
- * Applies gas, storage, and fee estimates to a batch of Tezos transaction parameters.
+ * Applies gas, storage, and fee estimates to a batch of Tezos operation parameters.
  *
  * @param source - The source address or key used to sign the transactions.
- * @param partialParams - An array of transaction parameters with operation kind.
+ * @param partialParams - An array of operation parameters with operation kind.
  * @returns A promise that resolves to an array of `OperationContents` with estimated gas, storage, and fee values applied.
- *
- * @throws Will throw an error if any operation kind is not `TRANSACTION`.
  *
  * @remarks
  * This function prepares a batch operation, estimates the required resources for each transaction,
  * and updates the transaction contents with the corresponding estimates.
  */
-export async function applyEstimates(source: string, partialParams: ParamsWithKind[]): Promise<OperationContents[]> {
-  const estimates: Estimate[] = await Tezos(source).estimate.batch(partialParams);
+export async function prepare(batchParams: ParamsWithKind[], publicKey?: string): Promise<PreparedOperation> {
+  const address: string | undefined = batchParams
+    .map((p) => ('pkh' in p ? p.pkh : 'source' in p ? p.source : undefined))
+    .find((x) => x !== undefined);
+  assert(address, 'Source address or public key hash is required for batch operation preparation');
 
-  const counterString: string = (await TezosRpc().getContract(source)).counter!;
-  let _counter: number = parseInt(counterString, 10);
+  const preparedOperation: PreparedOperation = await prepareBatch(batchParams, publicKey);
+  const estimates: Estimate[] = await estimateBatch(preparedOperation);
 
-  return zip(partialParams, estimates).map(([param, estimate]): OperationContents => {
-    assert(param.kind === OpKind.TRANSACTION, `Unsupported operation kind: ${param.kind}`);
+  for (let i: number = 0; i < preparedOperation.opOb.contents.length; i++) {
+    const content = preparedOperation.opOb.contents[i]!;
+    const estimate = estimates[i]!;
 
-    const { kind, amount: _amount, to: destination } = param;
-    const [amount, counter] = [`${_amount * 1e6}`, `${++_counter}`];
+    if ('fee' in content) content.fee = `${estimate?.suggestedFeeMutez ?? content.fee}`;
+    if ('gas_limit' in content) content.gas_limit = `${estimate?.gasLimit ?? content.gas_limit}`;
+    if ('storage_limit' in content) content.storage_limit = `${estimate?.storageLimit ?? content.storage_limit}`;
+  }
 
-    const { gasLimit, storageLimit, suggestedFeeMutez } = estimate;
-    const [gas_limit, storage_limit, fee] = [`${gasLimit}`, `${storageLimit}`, `${suggestedFeeMutez}`];
-
-    return { kind, source, destination, amount, gas_limit, storage_limit, fee, counter };
-  });
+  return preparedOperation;
 }
 
 /**
@@ -55,9 +61,9 @@ export async function applyEstimates(source: string, partialParams: ParamsWithKi
  * and computes the Blake2b hash of the forged bytes (prefixed with '03'). The hash can be used for signing.
  */
 const Forger: LocalForger = new LocalForger();
-export async function forgeOperation(contents: OperationContents[]): Promise<[string, string]> {
-  const branch: string = await TezosRpc().getBlockHash();
-  const opBytes: string = await Forger.forge({ contents, branch });
+export async function forgeOperation({ opOb }: PreparedOperation): Promise<[string, string]> {
+  // const branch: string = await TezosRpc().getBlockHash({ block: 'head~2' });
+  const opBytes: string = await Forger.forge(opOb);
 
   // Ask the sender to sign this hash
   const payload: Uint8Array = Buffer.from('03' + opBytes, 'hex');
@@ -73,9 +79,9 @@ export async function forgeOperation(contents: OperationContents[]): Promise<[st
  *
  * @param forgedHex - The hex string representing the forged operation bytes.
  * @param signatureHex - The hex string representing the signature bytes for the operation.
- * @returns A promise that resolves to the operation hash (`OperationHash`) of the injected transaction.
+ * @returns A promise that resolves to the operation hash (`OperationHash`) of the injected operation.
  */
-export async function sendForgedTransaction(forgedHex: string, signatureHex: string): Promise<OperationHash> {
+export async function sendForgedOperation(forgedHex: string, signatureHex: string): Promise<OperationHash> {
   const completeOperation: string = forgedHex + signatureHex;
   return TezosRpc().injectOperation(completeOperation);
 }

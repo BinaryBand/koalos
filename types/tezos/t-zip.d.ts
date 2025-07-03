@@ -49,17 +49,16 @@ type OpModifier = {
   token_id: number;
 };
 
+type Fa2Balance = { request: { owner: string; token_id: BigNumber[] }; balance: BigNumber };
+
 // https://tzip.tezosagora.org/proposal/tzip-12/#interface-specification
 type TZip12Entrypoints = {
   transfer: (params: { from_: string; txs: Txs[] }[]) => ContractMethodObject;
-  balance_of: (params: { owner: string; token_id: number }[]) => ContractMethodObject;
   update_operators: (ops: ({ add_operator: OpModifier } | { remove_operator: OpModifier })[]) => ContractMethodObject;
 };
 
 type TZip12Views = {
-  balance_of: (
-    params: { owner: string; token_id: number }[]
-  ) => ContractView<{ request: { owner: string; token_id: BigNumber[] }; balance: BigNumber }[]>;
+  balance_of: (params: { owner: string; token_id: number }[]) => ContractView<Fa2Balance[]>;
 };
 
 // https://tzip.tezosagora.org/proposal/tzip-12/#token-metadata

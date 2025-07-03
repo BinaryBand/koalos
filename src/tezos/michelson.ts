@@ -24,7 +24,7 @@ export function decodeMichelsonValue<T>(value: unknown, schema?: Schema): T | un
     if ('bytes' in michelson) {
       return Buffer.from(michelson.bytes, 'hex').toString('utf8') as T;
     } else if ('int' in michelson) {
-      const num: BigNumber = new BigNumber(michelson.int);
+      const num: BigNumber = BigNumber(michelson.int);
       return (num.isNaN() ? value : num) as T;
     } else if ('string' in michelson) {
       return michelson.string as T;
