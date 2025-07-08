@@ -48,7 +48,7 @@
     // "emitDeclarationOnly": true,
 
     /* Completeness */
-    "skipDefaultLibCheck": true,
-    "skipLibCheck": false
+    "skipDefaultLibCheck": false,
+    "skipLibCheck": true
   }
 }

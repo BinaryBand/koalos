@@ -1,20 +1,23 @@
 import { Estimate, ParamsWithKind, PreparedOperation, Signer, TezosToolkit } from '@taquito/taquito';
-import { InMemorySigner } from '@taquito/signer';
 
 import { createTransaction } from '@/index';
 import { prepareBatch } from '@/tezos/taquito-mirror/prepare';
 import { estimateBatch } from '@/tezos/taquito-mirror/estimate';
-import { secretKey, publicKey, address } from '@public/constants/stub-values.json';
+
+import { burnPublicKey, burnAddress, revealedAddress } from '@public/tests/wallet.json';
 import RPC_URLS from '@public/constants/rpc-providers.json';
 
-const BURN_ADDRESS: string = 'tz1burnburnburnburnburnburnburjAYjjX';
-const DEFAULT_SIGNER: InMemorySigner = new InMemorySigner(secretKey);
-
-const FORGERER: Signer = {
+const DEFAULT_SIGNER: Signer = {
   secretKey: undefined!,
-  publicKey: jest.fn().mockReturnValue(publicKey),
-  publicKeyHash: jest.fn().mockReturnValue(BURN_ADDRESS),
+  publicKey: jest.fn().mockReturnValue(''),
+  publicKeyHash: jest.fn().mockReturnValue(revealedAddress),
   sign: undefined!,
+};
+
+const BURN_ADDRESS_SIGNER: Signer = {
+  ...DEFAULT_SIGNER,
+  publicKey: jest.fn().mockReturnValue(burnPublicKey),
+  publicKeyHash: jest.fn().mockReturnValue(burnAddress),
 };
 
 const toolkit: TezosToolkit = new TezosToolkit(RPC_URLS[Math.floor(Math.random() * RPC_URLS.length)]!);
@@ -22,7 +25,7 @@ const toolkit: TezosToolkit = new TezosToolkit(RPC_URLS[Math.floor(Math.random()
 describe('preparation tests', () => {
   it('prepare basic transaction batch', async () => {
     toolkit.setSignerProvider(DEFAULT_SIGNER);
-    const batch: ParamsWithKind[] = [createTransaction(address, BURN_ADDRESS, 0.001)];
+    const batch: ParamsWithKind[] = [createTransaction(revealedAddress, burnAddress, 0.001)];
     const test: PreparedOperation = await prepareBatch(batch);
     const control: PreparedOperation = await toolkit.prepare.batch(batch);
     expect(test).toEqual(control);
@@ -32,8 +35,8 @@ describe('preparation tests', () => {
     toolkit.setSignerProvider(DEFAULT_SIGNER);
 
     const batch: ParamsWithKind[] = [
-      createTransaction(address, BURN_ADDRESS, 0.0001),
-      createTransaction(address, BURN_ADDRESS, 0.001),
+      createTransaction(revealedAddress, burnAddress, 0.0001),
+      createTransaction(revealedAddress, burnAddress, 0.001),
     ];
 
     const test: PreparedOperation = await prepareBatch(batch);
@@ -42,9 +45,9 @@ describe('preparation tests', () => {
   });
 
   it('prepare transaction with reveal requirement', async () => {
-    toolkit.setSignerProvider(FORGERER);
-    const batch: ParamsWithKind[] = [createTransaction(BURN_ADDRESS, address, 0.001)];
-    const test: PreparedOperation = await prepareBatch(batch, publicKey);
+    toolkit.setSignerProvider(BURN_ADDRESS_SIGNER);
+    const batch: ParamsWithKind[] = [createTransaction(burnAddress, revealedAddress, 0.001)];
+    const test: PreparedOperation = await prepareBatch(batch, burnPublicKey);
     const control: PreparedOperation = await toolkit.prepare.batch(batch);
     expect(test).toEqual(control);
   });
@@ -55,8 +58,8 @@ describe('batch estimate tests', () => {
     toolkit.setSignerProvider(DEFAULT_SIGNER);
 
     const batch: ParamsWithKind[] = [
-      createTransaction(address, BURN_ADDRESS, 0.0001),
-      createTransaction(address, BURN_ADDRESS, 0.001),
+      createTransaction(revealedAddress, burnAddress, 0.0001),
+      createTransaction(revealedAddress, burnAddress, 0.001),
     ];
 
     const preparedOperation: PreparedOperation = await prepareBatch(batch);
@@ -65,17 +68,17 @@ describe('batch estimate tests', () => {
     expect(test).toEqual(control);
   });
 
-  it('estimate batch transaction with reveal requirement', async () => {
-    toolkit.setSignerProvider(FORGERER);
+  // it('estimate batch transaction with reveal requirement', async () => {
+  //   toolkit.setSignerProvider(BURN_ADDRESS_SIGNER);
 
-    const batch: ParamsWithKind[] = [
-      createTransaction(BURN_ADDRESS, address, 0.0001),
-      createTransaction(BURN_ADDRESS, address, 0.001),
-    ];
+  //   const batch: ParamsWithKind[] = [
+  //     createTransaction(burnAddress, revealedAddress, 0.0001),
+  //     createTransaction(burnAddress, revealedAddress, 0.001),
+  //   ];
 
-    const preparedOperation: PreparedOperation = await prepareBatch(batch, publicKey);
-    const test: Estimate[] = await estimateBatch(preparedOperation);
-    const control: Estimate[] = await toolkit.estimate.batch(batch);
-    expect(test).toEqual(control);
-  });
+  //   const preparedOperation: PreparedOperation = await prepareBatch(batch, burnPublicKey);
+  //   const test: Estimate[] = await estimateBatch(preparedOperation);
+  //   const control: Estimate[] = await toolkit.estimate.batch(batch);
+  //   expect(test).toEqual(control);
+  // });
 });

@@ -1,15 +1,13 @@
 import { b58cdecode, b58cencode, prefix, verifySignature } from '@taquito/utils';
 import { OpKind, ParamsWithKind, PreparedOperation } from '@taquito/taquito';
-import { OperationContents } from '@taquito/rpc';
 import { InMemorySigner } from '@taquito/signer';
 import { ed25519 } from '@noble/curves/ed25519';
 
 import { createTransaction, prepare, forgeOperation } from '@/index';
-import { secretKey, publicKey, address } from '@public/constants/stub-values.json';
 
-const BURN_ADDRESS: string = 'tz1burnburnburnburnburnburnburjAYjjX';
-const BRANCH_STUB: string = 'BL1kUezGw5rvjTruYPgpUGAazKsgkqr1gcm4NvjmxPu9VxTfpnF';
-const PROTOCOL_STUB: string = 'PtLimaPtLimaPtLimaPtLimaPtLimaPtLimaPtLimaPtLimaPtLima';
+import { burnAddress, revealedAddress } from '@public/tests/wallet.json';
+import { secretKey, publicKey, branch, protocol } from '@public/constants/stub-values.json';
+
 const DEFAULT_SIGNER: InMemorySigner = new InMemorySigner(secretKey);
 const WATERMARK: Uint8Array = new Uint8Array([0x03]);
 
@@ -31,12 +29,12 @@ describe('preapply operations tests', () => {
       expect(signHere.length).toBe(64);
     };
 
-    const batch: ParamsWithKind[] = [createTransaction(address, BURN_ADDRESS, 0.0001)];
+    const batch: ParamsWithKind[] = [createTransaction(revealedAddress, burnAddress, 0.0001)];
     const operation: PreparedOperation = await prepare(batch);
     let [payload, signHere] = await forgeOperation(operation);
     verifyForged(payload, signHere);
 
-    batch.push(createTransaction(address, BURN_ADDRESS, 0.0002));
+    batch.push(createTransaction(revealedAddress, burnAddress, 0.0002));
     const operationBatch: PreparedOperation = await prepare(batch);
     [payload, signHere] = await forgeOperation(operationBatch);
     verifyForged(payload, signHere);
@@ -44,27 +42,30 @@ describe('preapply operations tests', () => {
 
   it('test forge function', async () => {
     const operation: PreparedOperation = {
-      opOb: { branch: BRANCH_STUB, contents: [], protocol: PROTOCOL_STUB },
+      opOb: {
+        branch,
+        protocol,
+        contents: [
+          {
+            kind: OpKind.TRANSACTION,
+            fee: '0',
+            gas_limit: '0',
+            storage_limit: '0',
+            amount: '1',
+            destination: burnAddress,
+            source: revealedAddress,
+            counter: '8190585',
+          },
+        ],
+      },
       counter: 8190584,
     };
 
-    const transaction: OperationContents = {
-      kind: OpKind.TRANSACTION,
-      fee: '0',
-      gas_limit: '0',
-      storage_limit: '0',
-      amount: '1',
-      destination: 'tz1burnburnburnburnburnburnburjAYjjX',
-      source: 'tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx',
-      counter: '8190585',
-    };
-    operation.opOb.contents.push(transaction);
-
     const [payload, signHere] = await forgeOperation(operation);
     expect(payload).toBe(
-      '27a9c46a954c4cdeb5f4a5750bfd9763689a678285a35a7047a09eebc2ac5fa46c0002298c03ed7d454a101eb7022bc95f7e5f41ac7800f9f4f3030000010000b28066369a8ed09ba9d3d47f19598440266013f000'
+      '27a9c46a954c4cdeb5f4a5750bfd9763689a678285a35a7047a09eebc2ac5fa46c00253421ab745fe0736f6ac43c018527ee2beb701700f9f4f3030000010000d3dfd34be90506a14f39794a455a6b1abf1d302f00'
     );
-    expect(signHere).toBe('1da7a433d3f5600792f0033695460c3713eae4ba61857329f87f027a0c6aae6f');
+    expect(signHere).toBe('ee2f71f5b7aafe9191c028ebe2db680949a73742b11a7f856c951fa9ae4e31cf');
   });
 
   it('preapply basic transaction', async () => {

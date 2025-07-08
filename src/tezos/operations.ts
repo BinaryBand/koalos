@@ -1,19 +1,20 @@
 import { Estimate, ParamsWithKind, PreparedOperation, withKind } from '@taquito/taquito';
-import { OperationHash, OpKind } from '@taquito/rpc';
+import { OperationHash, OpKind, TransactionOperationParameter } from '@taquito/rpc';
 import { LocalForger } from '@taquito/local-forging';
 import { blake2b } from '@noble/hashes/blake2';
 
-import { prepareBatch } from '@/tezos/taquito-mirror/prepare';
+import { extractAddressFromParams, prepareBatch } from '@/tezos/taquito-mirror/prepare';
 import { estimateBatch } from '@/tezos/taquito-mirror/estimate';
-import { TezosRpc } from '@/tezos/provider';
+import { Blockchain } from '@/tezos/provider';
 import { assert } from '@/tools/utils';
 
 export function createTransaction(
   source: string,
   to: string,
-  amount: number
+  amount: number,
+  parameter?: TransactionOperationParameter
 ): withKind<ParamsWithKind, OpKind.TRANSACTION> {
-  return { kind: OpKind.TRANSACTION, source, to, amount };
+  return { kind: OpKind.TRANSACTION, source, to, amount, parameter } as withKind<ParamsWithKind, OpKind.TRANSACTION>;
 }
 
 /**
@@ -28,14 +29,13 @@ export function createTransaction(
  * and updates the transaction contents with the corresponding estimates.
  */
 export async function prepare(batchParams: ParamsWithKind[], publicKey?: string): Promise<PreparedOperation> {
-  const address: string | undefined = batchParams
-    .map((p) => ('pkh' in p ? p.pkh : 'source' in p ? p.source : undefined))
-    .find((x) => x !== undefined);
+  const address: string | undefined = extractAddressFromParams(batchParams);
   assert(address, 'Source address or public key hash is required for batch operation preparation');
 
   const preparedOperation: PreparedOperation = await prepareBatch(batchParams, publicKey);
   const estimates: Estimate[] = await estimateBatch(preparedOperation);
 
+  // Apply estimates to each operation content
   for (let i: number = 0; i < preparedOperation.opOb.contents.length; i++) {
     const content = preparedOperation.opOb.contents[i]!;
     const estimate = estimates[i]!;
@@ -82,6 +82,6 @@ export async function forgeOperation({ opOb }: PreparedOperation): Promise<[stri
  * @returns A promise that resolves to the operation hash (`OperationHash`) of the injected operation.
  */
 export async function sendForgedOperation(forgedHex: string, signatureHex: string): Promise<OperationHash> {
-  const completeOperation: string = forgedHex + signatureHex;
-  return TezosRpc().injectOperation(completeOperation);
+  const signedOperation: string = forgedHex + signatureHex;
+  return Blockchain.injectOperation(signedOperation);
 }

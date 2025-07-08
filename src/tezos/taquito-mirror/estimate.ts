@@ -15,7 +15,7 @@ import {
 import { ForgeParams, LocalForger } from '@taquito/local-forging';
 import { MergedOperationResult } from '@taquito/taquito/dist/types/operations/errors';
 
-import Tezos, { TezosRpc } from '@/tezos/provider';
+import { Blockchain } from '@/tezos/provider';
 
 const OP_SIZE_REVEAL: number = 324; // injecting size tz1=320, tz2=322, tz3=322, tz4=420(not supported)
 const MILLIGAS_BUFFER: number = 100000;
@@ -102,20 +102,20 @@ function getEstimationContent(
 }
 
 async function calculateEstimates(op: PreparedOperation, constants: ConstantsResponse) {
-  const params: ForgeParams = Tezos().prepare.toForge(op);
+  const params: ForgeParams = { branch: op.opOb.branch, contents: op.opOb.contents };
   const opBytes: string = await new LocalForger().forge(params);
 
   const operation: RPCSimulateOperationParam = {
     operation: params,
-    chain_id: await TezosRpc().getChainId(),
+    chain_id: await Blockchain.chainId,
   };
 
-  const results: PreapplyResponse = await TezosRpc().simulateOperation(operation);
+  const results: PreapplyResponse = await Blockchain.simulateOperation(operation);
   const { cost_per_byte, origination_size = 257 } = constants;
 
   let numberOfOps: number = 1;
   if (Array.isArray(op.opOb.contents) && op.opOb.contents.length > 1) {
-    numberOfOps = results.contents[0]!.kind === 'reveal' ? op.opOb.contents.length - 1 : op.opOb.contents.length;
+    numberOfOps = results.contents[0]?.kind === 'reveal' ? op.opOb.contents.length - 1 : op.opOb.contents.length;
   }
 
   return results.contents.map((contents: OperationContentsAndResult) => {
@@ -126,7 +126,7 @@ async function calculateEstimates(op: PreparedOperation, constants: ConstantsRes
 }
 
 export async function estimateBatch(preparedOperation: PreparedOperation): Promise<Estimate[]> {
-  const protocolConstants: ConstantsResponse = await TezosRpc().getConstants();
+  const protocolConstants: ConstantsResponse = await Blockchain.constants;
   const estimateProperties: EstimateProperties[] = await calculateEstimates(preparedOperation, protocolConstants);
   return Estimate.createArrayEstimateInstancesFromProperties(estimateProperties);
 }

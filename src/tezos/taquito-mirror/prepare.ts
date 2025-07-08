@@ -1,6 +1,5 @@
-import { OpKind, VotingPeriodBlockResult, OperationContents, ManagerKeyResponse } from '@taquito/rpc';
+import { OpKind, OperationContents, ManagerKeyResponse } from '@taquito/rpc';
 import {
-  createRevealOperation,
   DefaultGlobalConstantsProvider,
   getRevealFee,
   getRevealGasLimit,
@@ -12,10 +11,10 @@ import {
   RevealParams,
   RPCOperation,
   RPCOpWithFee,
-  RPCOpWithSource,
   RPCRevealOperation,
 } from '@taquito/taquito';
 import {
+  createRevealOperation,
   createIncreasePaidStorageOperation,
   createOriginationOperation,
   createRegisterGlobalConstantOperation,
@@ -30,7 +29,7 @@ import { Expr, GlobalConstantHashAndValue, Parser, Prim } from '@taquito/michel-
 import { Schema } from '@taquito/michelson-encoder';
 import { BigNumber } from 'bignumber.js';
 
-import { TezosRpc } from '@/index';
+import { Blockchain } from '@/tezos/provider';
 import { assert } from '@/tools/utils';
 
 function mergeLimits(userDefinedLimit: Limits, defaultLimits: Required<Limits>): Required<Limits> {
@@ -41,35 +40,19 @@ function mergeLimits(userDefinedLimit: Limits, defaultLimits: Required<Limits>):
   };
 }
 
-const p: Parser = new Parser();
-async function formatCodeParam(code: string | object[]) {
-  let parsedCode: Expr[];
-  if (typeof code === 'string') {
-    const c = p.parseScript(code);
-    if (c === null) {
-      throw new Error('Unable to parse code');
-    }
-    parsedCode = c;
-  } else {
-    const expr: Expr = p.parseJSON(code);
-    const order = ['parameter', 'storage', 'code'];
-    parsedCode = (expr as Prim[]).sort((a, b) => order.indexOf(a.prim) - order.indexOf(b.prim));
+const P: Parser = new Parser();
+async function formatCodeParam(code: string | object[]): Promise<Expr[]> {
+  if (typeof code !== 'string') {
+    const expr: Prim[] = P.parseJSON(code) as Prim[];
+    const order: string[] = ['parameter', 'storage', 'code'];
+    return expr.sort((a, b) => order.indexOf(a.prim) - order.indexOf(b.prim));
   }
-  return parsedCode;
+
+  return P.parseScript(code)!;
 }
 
-async function formatInitParam(init: string | object) {
-  let parsedInit: Expr;
-  if (typeof init === 'string') {
-    const c = p.parseMichelineExpression(init);
-    if (c === null) {
-      throw new Error('Invalid init parameter');
-    }
-    parsedInit = c;
-  } else {
-    parsedInit = p.parseJSON(init);
-  }
-  return parsedInit;
+async function formatInitParam(init: string | object): Promise<Expr> {
+  return typeof init === 'string' ? P.parseMichelineExpression(init)! : P.parseJSON(init);
 }
 
 async function findGlobalConstantsHashAndValue(schema: Schema) {
@@ -103,7 +86,7 @@ async function prepareCodeOrigination(params: OriginateParams): Promise<Originat
     if (!storageType?.args) {
       throw new Error('The storage section is missing from the script');
     }
-    const schema = new Schema(storageType.args[0]!);
+    const schema: Schema = new Schema(storageType.args[0]!);
     const globalConstantsHashAndValue = await findGlobalConstantsHashAndValue(schema);
 
     if (Object.keys(globalConstantsHashAndValue).length !== 0) {
@@ -122,8 +105,6 @@ async function prepareCodeOrigination(params: OriginateParams): Promise<Originat
 
 async function getRpcOp(params: ParamsWithKind): Promise<RPCOperation> {
   switch (params.kind) {
-    // case OpKind.REVEAL:
-    //   return createRevealOperation({ ...params }, params.source!, params.public_key);
     case OpKind.TRANSACTION:
       return createTransferOperation({ ...params });
     case OpKind.ORIGINATION:
@@ -147,24 +128,18 @@ async function getRpcOp(params: ParamsWithKind): Promise<RPCOperation> {
   }
 }
 
-function getSource(op: RPCOpWithSource, pkh: string, source: string | undefined) {
-  return { source: typeof op.source === 'undefined' ? source || pkh : op.source };
-}
-
 function constructOpContents(
   ops: RPCOperation[],
   headCounter: number,
-  pkh: string,
-  counters: Record<string, number> = {},
-  source?: string,
-  currentVotingPeriod?: VotingPeriodBlockResult
+  source: string,
+  counters: Record<string, number> = {}
 ): OperationContents[] {
-  function getFee(op: RPCOpWithFee, pkh: string, headCounter: number) {
-    if (!counters[pkh] || counters[pkh] < headCounter) {
-      counters[pkh] = headCounter;
+  function getFee(op: RPCOpWithFee, address: string, headCounter: number) {
+    if (!counters[address] || counters[address] < headCounter) {
+      counters[address] = headCounter;
     }
 
-    const opCounter: number = ++counters[pkh];
+    const opCounter: number = ++counters[address];
     return {
       counter: `${opCounter}`,
       fee: `${op.fee ?? 0}`,
@@ -179,10 +154,10 @@ function constructOpContents(
       case OpKind.DRAIN_DELEGATE:
         return op;
       case OpKind.ORIGINATION:
-        return { ...op, balance: `${op.balance ?? 0}`, ...getSource(op, pkh, source), ...getFee(op, pkh, headCounter) };
+        return { ...op, balance: `${op.balance ?? 0}`, source, ...getFee(op, source, headCounter) };
       case OpKind.INCREASE_PAID_STORAGE:
       case OpKind.TRANSACTION:
-        return { ...op, amount: `${op.amount ?? 0}`, ...getSource(op, pkh, source), ...getFee(op, pkh, headCounter) };
+        return { ...op, amount: `${op.amount ?? 0}`, source, ...getFee(op, source, headCounter) };
       case OpKind.REVEAL:
       case OpKind.DELEGATION:
       case OpKind.REGISTER_GLOBAL_CONSTANT:
@@ -190,41 +165,21 @@ function constructOpContents(
       case OpKind.SMART_ROLLUP_ADD_MESSAGES:
       case OpKind.SMART_ROLLUP_ORIGINATE:
       case OpKind.SMART_ROLLUP_EXECUTE_OUTBOX_MESSAGE:
-        return { ...op, ...getSource(op, pkh, source), ...getFee(op, pkh, headCounter) };
+        return { ...op, source, ...getFee(op, source, headCounter) };
       case OpKind.TRANSFER_TICKET:
-        return {
-          ...op,
-          ticket_amount: `${op.ticket_amount ?? 0}`,
-          ...getSource(op, pkh, source),
-          ...getFee(op, pkh, headCounter),
-        };
-      case OpKind.BALLOT:
-        assert(currentVotingPeriod, 'Current voting period is required for ballot operation');
-        return { ...op, period: currentVotingPeriod?.voting_period.index };
-      case OpKind.PROPOSALS:
-        assert(currentVotingPeriod, 'Current voting period is required for proposals operation');
-        return { ...op, period: currentVotingPeriod?.voting_period.index };
+        const ticket_amount: string = `${op.ticket_amount ?? 0}`;
+        return { ...op, ticket_amount, source, ...getFee(op, source, headCounter) };
       default:
         throw new Error(`Invalid operation kind: ${op.kind}`);
     }
   });
 }
 
-export async function prepareBatch(
-  batchParams: ParamsWithKind[],
-  publicKey?: string,
-  currentVotingPeriod?: VotingPeriodBlockResult
-): Promise<PreparedOperation> {
-  const { source } = batchParams.find((param): param is ParamsWithKind & { source: string } => 'source' in param) || {};
-
-  const address: string | undefined =
-    batchParams.find((param): param is ParamsWithKind & { pkh: string } => 'pkh' in param)?.pkh || source;
-  assert(address, 'Source address or public key hash is required for batch operation preparation');
-
+async function applyLimits(batchParams: ParamsWithKind[]): Promise<RPCOperation[]> {
   let defaultLimits: Required<Limits> = undefined!;
   if (batchParams.some(isOpWithFee)) {
     const { hard_gas_limit_per_block, hard_gas_limit_per_operation, hard_storage_limit_per_operation } =
-      await TezosRpc().getConstants();
+      await Blockchain.constants;
 
     const gasLimit: BigNumber = BigNumber.min(
       hard_gas_limit_per_operation,
@@ -238,21 +193,27 @@ export async function prepareBatch(
     };
   }
 
-  const ops: RPCOperation[] = await Promise.all(
+  return Promise.all(
     batchParams
-      .map(async (op): Promise<RPCOperation> => {
-        if (!isOpWithFee(op)) {
-          return op;
-        }
-
-        const limits: Required<Limits> = mergeLimits(op, defaultLimits);
-        return getRpcOp({ ...op, ...limits });
-      })
+      .map((op) => (isOpWithFee(op) ? getRpcOp({ ...op, ...mergeLimits(op, defaultLimits) }) : Promise.resolve(op)))
       .flat()
   );
+}
+
+export function extractAddressFromParams(batchParams: ParamsWithKind[]): string | undefined {
+  return batchParams
+    .map((p) => ('pkh' in p ? p.pkh : 'source' in p ? p.source : undefined))
+    .find((x) => x !== undefined);
+}
+
+export async function prepareBatch(batchParams: ParamsWithKind[], publicKey?: string): Promise<PreparedOperation> {
+  const address: string | undefined = extractAddressFromParams(batchParams);
+  assert(address, 'Source address or public key hash is required for batch operation preparation');
+
+  const operations: RPCOperation[] = await applyLimits(batchParams);
 
   const managerKeyExists = async () => {
-    const manager: ManagerKeyResponse = await TezosRpc().getManagerKey(address);
+    const manager: ManagerKeyResponse | undefined = await Blockchain.getManagerKey(address);
     return manager && Boolean(typeof manager === 'object' ? manager.key : manager);
   };
 
@@ -267,25 +228,17 @@ export async function prepareBatch(
     };
 
     const revealOp: RPCRevealOperation = await createRevealOperation(revealParams, address, publicKey);
-    ops.unshift(revealOp);
+    operations.unshift(revealOp);
   }
 
-  const [branch, { protocol }, { counter }] = await Promise.all([
-    TezosRpc().getBlockHash({ block: 'head~2' }),
-    TezosRpc().getProtocols(),
-    TezosRpc().getContract(address),
+  const [branch, { protocol }, contract] = await Promise.all([
+    Blockchain.getBlockHash({ block: 'head~2' }),
+    Blockchain.getProtocols(),
+    Blockchain.getContractResponse(address),
   ]);
 
-  const counters: Record<string, number> = {};
-  const headCounter: number = parseInt(counter!, 10);
-  const contents: OperationContents[] = constructOpContents(
-    ops,
-    headCounter,
-    address,
-    counters,
-    source,
-    currentVotingPeriod
-  );
+  const headCounter: number = parseInt(contract?.counter ?? '0', 10);
+  const contents: OperationContents[] = constructOpContents(operations, headCounter, address);
 
   return { opOb: { branch, contents, protocol }, counter: headCounter };
 }
