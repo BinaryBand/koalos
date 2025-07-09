@@ -1,11 +1,14 @@
 import { b58cdecode, b58cencode, prefix, verifySignature } from '@taquito/utils';
-import { OpKind, ParamsWithKind, PreparedOperation } from '@taquito/taquito';
+import { OperationContentsAndResult, PreapplyResponse } from '@taquito/rpc';
 import { InMemorySigner } from '@taquito/signer';
+import { OpKind } from '@taquito/taquito';
 import { ed25519 } from '@noble/curves/ed25519';
+import { runSimulation } from 'jest.setup';
+import { assert } from '@/tools/utils';
 
-import { createTransaction, prepare, forgeOperation } from '@/index';
+import { createReveal, createTransaction, forgeOperation, prepare } from '@/index';
 
-import { burnAddress, revealedAddress } from '@public/tests/wallet.json';
+import { burnPublicKey, burnAddress, revealedAddress } from '@public/tests/wallet.json';
 import { secretKey, publicKey, branch, protocol } from '@public/constants/stub-values.json';
 
 const DEFAULT_SIGNER: InMemorySigner = new InMemorySigner(secretKey);
@@ -18,28 +21,55 @@ function sign(operationHash: string): string {
   return Buffer.from(sig).toString('hex');
 }
 
-describe('preapply operations tests', () => {
-  it('verify forge operations', async () => {
-    const verifyForged = (payload: string, signHere: string) => {
-      expect(payload).toBeDefined();
-      expect(signHere).toBeDefined();
-      expect(/^[a-f0-9]+$/.test(payload)).toBeTruthy();
-      expect(/^[a-f0-9]+$/.test(signHere)).toBeTruthy();
-      expect(payload.length).toBeGreaterThan(0);
-      expect(signHere.length).toBe(64);
-    };
-
-    const batch: ParamsWithKind[] = [createTransaction(revealedAddress, burnAddress, 0.0001)];
+describe('operation tests', () => {
+  it('verify simple operation', async () => {
+    const batch: Operation[] = [createTransaction(revealedAddress, burnAddress, 0.0001)];
     const operation: PreparedOperation = await prepare(batch);
-    let [payload, signHere] = await forgeOperation(operation);
-    verifyForged(payload, signHere);
-
-    batch.push(createTransaction(revealedAddress, burnAddress, 0.0002));
-    const operationBatch: PreparedOperation = await prepare(batch);
-    [payload, signHere] = await forgeOperation(operationBatch);
-    verifyForged(payload, signHere);
+    const simulation: PreapplyResponse = await runSimulation(operation);
+    expect(
+      simulation.contents.every((c: OperationContentsAndResult) => {
+        assert('metadata' in c, 'Expected metadata to be present in operation contents');
+        assert('operation_result' in c.metadata, 'Expected operation_result to be present in metadata');
+        return c.metadata.operation_result.status === 'applied';
+      })
+    ).toBeTruthy();
   });
 
+  it('verify batched operation', async () => {
+    const batch: Operation[] = [
+      createTransaction(revealedAddress, burnAddress, 0.0001),
+      createTransaction(revealedAddress, burnAddress, 0.001),
+    ];
+    const operation: PreparedOperation = await prepare(batch);
+    const simulation: PreapplyResponse = await runSimulation(operation);
+    expect(
+      simulation.contents.every((c: OperationContentsAndResult) => {
+        assert('metadata' in c, 'Expected metadata to be present in operation contents');
+        assert('operation_result' in c.metadata, 'Expected operation_result to be present in metadata');
+        return c.metadata.operation_result.status === 'applied';
+      })
+    ).toBeTruthy();
+  });
+
+  it('verify operation with reveal requirement', async () => {
+    const batch: Operation[] = [
+      createReveal(burnAddress, burnPublicKey),
+      createTransaction(burnAddress, revealedAddress, 0.0001),
+      createTransaction(burnAddress, revealedAddress, 0.001),
+    ];
+    const operation: PreparedOperation = await prepare(batch);
+    const simulation: PreapplyResponse = await runSimulation(operation);
+    expect(
+      simulation.contents.every((c: OperationContentsAndResult) => {
+        assert('metadata' in c, 'Expected metadata to be present in operation contents');
+        assert('operation_result' in c.metadata, 'Expected operation_result to be present in metadata');
+        return c.metadata.operation_result.status === 'applied';
+      })
+    ).toBeTruthy();
+  });
+});
+
+describe('preapply operations tests', () => {
   it('test forge function', async () => {
     const operation: PreparedOperation = {
       opOb: {

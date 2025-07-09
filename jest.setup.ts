@@ -1,6 +1,5 @@
 import {
   ContractResponse,
-  ScriptResponse,
   BigMapResponse,
   RpcClient,
   RPCOptions,
@@ -20,12 +19,13 @@ import RPC_URLS from '@public/constants/rpc-providers.json';
 import { burnAddress } from '@public/tests/wallet.json';
 
 import { fetchAndCache } from '@/tools/cache';
+import { Blockchain } from '@/tezos/provider';
 
 const BLOCK_DELAY: number = BigNumber(CONSTANTS.minimal_block_delay).toNumber() * 1000; // In seconds
 const BLOCKS_PER_CYCLE: number = BigNumber(CONSTANTS.blocks_per_cycle).toNumber();
 const CACHE_DIRECTORY: string = path.join(__dirname, 'tests', 'cache');
 
-const FA2_BALANCE_RESPONSE_SCHEMA: MichelsonExpression = {
+const FA2_BALANCE_RESPONSE_SCHEMA: MichelsonV1Expression = {
   prim: 'pair',
   args: [
     {
@@ -49,6 +49,15 @@ function quickHash(seed: string, ...salt: string[]): string {
 function mockNum(seed: string, modulo: number = Number.MAX_SAFE_INTEGER): BigNumber {
   const mockNumber: BigNumber = Array.from(seed).reduce((acc, c) => acc.plus(c.charCodeAt(0)), BigNumber(7));
   return mockNumber.pow(seed.charCodeAt(seed.length - 3), modulo).plus(modulo);
+}
+
+export async function runSimulation(op: PreparedOperation) {
+  const operation: RPCSimulateOperationParam = {
+    operation: { branch: op.opOb.branch, contents: op.opOb.contents },
+    chain_id: await Blockchain.chainId,
+  };
+
+  return Blockchain.simulateOperation(operation);
 }
 
 jest.mock('@/tools/ipfs', () => ({
@@ -159,7 +168,7 @@ jest.mock('@taquito/rpc', () => {
         const fa2BalanceSchema: Schema = new Schema(FA2_BALANCE_RESPONSE_SCHEMA);
         const requestSchema: Schema = new Schema({ prim: 'pair', args: [{ prim: 'address' }, { prim: 'nat' }] });
 
-        const mockBalance: MichelsonExpression[] = input.map((michelson: MichelsonExpression) => {
+        const mockBalance: MichelsonV1Expression[] = input.map((michelson: MichelsonV1Expression) => {
           const [owner, token_id] = Object.values<string>(requestSchema.Execute(michelson));
           const balance: BigNumber = mockNum(JSON.stringify(params) + JSON.stringify(michelson), 10000);
           return fa2BalanceSchema.Encode({ request: { owner, token_id }, balance });

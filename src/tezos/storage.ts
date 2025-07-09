@@ -1,5 +1,5 @@
 import { MichelsonMap, Schema, Token } from '@taquito/michelson-encoder';
-import { BigMapResponse, ContractResponse, ScriptResponse } from '@taquito/rpc';
+import { BigMapResponse, ContractResponse } from '@taquito/rpc';
 import { BigNumber } from 'bignumber.js';
 
 import { decodeMichelsonValue } from '@/tezos/codec';
@@ -14,7 +14,7 @@ export class TezosStorage {
   private readonly schema: Schema;
   private readonly storage: unknown;
 
-  constructor(public readonly address: string, script: ScriptResponse) {
+  constructor(public readonly address: string, public readonly script: ScriptResponse) {
     this.schema = Schema.fromRPCResponse({ script });
     this.storage = this.schema.Execute(script.storage);
   }
@@ -105,9 +105,8 @@ export class TezosStorage {
     const bigMapSchema: Token | undefined = this.schema.findToken('big_map').find((t): boolean => t.annot() === key);
     if (bigMapSchema !== undefined) {
       const bigMapId: string = TezosStorage.findBigMapId(this.storage, key)!;
-      const michelsonSchema: MichelsonExpression | undefined = bigMapSchema.tokenVal.args?.[1];
-      const storageSchema: Schema | undefined = michelsonSchema ? new Schema(michelsonSchema) : undefined;
-      return new BigMap(this.address, bigMapId, storageSchema!) as T;
+      const michelsonSchema: MichelsonV1Expression | undefined = bigMapSchema.tokenVal.args?.[1];
+      return new BigMap(this.address, bigMapId, michelsonSchema!) as T;
     }
 
     return key in this.storage ? ((this.storage as Record<string, unknown>)[key] as T) : undefined;
@@ -116,13 +115,15 @@ export class TezosStorage {
 
 export class BigMap {
   private readonly _id: BigNumber;
+  private readonly schema: Schema | undefined;
 
   public get id(): BigNumber {
     return this._id;
   }
 
-  constructor(public readonly address: string, id: BigNumber.Value, private readonly schema: Schema) {
+  constructor(public readonly address: string, id: BigNumber.Value, michelsonSchema: MichelsonV1Expression) {
     this._id = BigNumber(id);
+    this.schema = michelsonSchema ? new Schema(michelsonSchema) : undefined;
     assert(/\d+/.test(this._id.toString()), `Invalid BigMap ID: ${this._id.toString()}`);
   }
 

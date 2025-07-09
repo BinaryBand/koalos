@@ -1,14 +1,27 @@
-import { castToBigNumber, TransactionOperationParameter } from '@taquito/rpc';
+import { castToBigNumber } from '@taquito/rpc';
 import { MichelsonMap, UnitValue } from '@taquito/michelson-encoder';
 import { BigNumber } from 'bignumber.js';
 
 import { unwrapMichelsonMap } from '@/tezos/codec';
-import { Contract } from '@/tezos/smart-contracts';
+import {
+  Fa2Balance,
+  Fa2BalanceRequest,
+  Fa2TransferParams,
+  OperatorUpdate,
+  TZip17Metadata,
+  TZip21TokenMetadata,
+} from '@/tezos/types';
+import { TezosContract } from '@/tezos/smart-contracts';
 import { BigMap, TezosStorage } from '@/tezos/storage';
 import { getFromIpfs, isIpfsLink } from '@/tools/ipfs';
 import { isJson } from '@/tools/utils';
 
-export class FaToken extends Contract {
+type TokenMetadata = {
+  token_info?: MichelsonMap<string, unknown> | TZip21TokenMetadata;
+  1?: MichelsonMap<string, unknown> | TZip21TokenMetadata;
+};
+
+class FaToken extends TezosContract {
   constructor(address: string) {
     super(address);
   }
@@ -68,6 +81,18 @@ export class FaToken extends Contract {
   }
 }
 
+/*****************************************************
+ * TZip-5
+ * FA1 Interface
+ * https://tzip.tezosagora.org/proposal/tzip-5
+ *****************************************************/
+
+/*****************************************************
+ * TZip-7
+ * FA1.2 Interface
+ * https://tzip.tezosagora.org/proposal/tzip-7
+ *****************************************************/
+
 export class Fa12Token extends FaToken {
   constructor(address: string) {
     super(address);
@@ -82,9 +107,15 @@ export class Fa12Token extends FaToken {
   }
 
   async getTotalSupply(): Promise<BigNumber> {
-    return this.executeView<UnitValue, BigNumber>(UnitValue, 'getTotalSupply');
+    return this.executeView<typeof UnitValue, BigNumber>(UnitValue, 'getTotalSupply');
   }
 }
+
+/*****************************************************
+ * TZip-12
+ * FA2 Interface
+ * https://tzip.tezosagora.org/proposal/tzip-12
+ *****************************************************/
 
 export class Fa2Token extends FaToken {
   constructor(address: string) {
@@ -97,5 +128,9 @@ export class Fa2Token extends FaToken {
 
   async transfer(params: Fa2TransferParams[]): Promise<TransactionOperationParameter> {
     return this.createMethod(params, 'transfer');
+  }
+
+  async update_operators(ops: OperatorUpdate[]): Promise<TransactionOperationParameter> {
+    return this.createMethod(ops, 'update_operators');
   }
 }

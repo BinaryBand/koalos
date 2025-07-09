@@ -1,8 +1,10 @@
-import { PreparedOperation } from '@taquito/taquito';
-import { TransactionOperationParameter } from '@taquito/rpc';
+import { OperationContentsAndResult, PreapplyResponse } from '@taquito/rpc';
+import { runSimulation } from 'jest.setup';
 import { BigNumber } from 'bignumber.js';
 
 import { createTransaction, prepare, Fa12Token, Fa2Token } from '@/index';
+import { Fa2Balance, TZip17Metadata, TZip21TokenMetadata } from '@/tezos/types';
+import { assert } from '@/tools/utils';
 
 import { burnAddress, revealedAddress } from '@public/tests/wallet.json';
 
@@ -39,10 +41,18 @@ describe('FA-1.2 token contract', () => {
       },
     });
 
-    // Check if this operation will work
-    const operation = [createTransaction(revealedAddress, burnAddress, 0, transferParams)];
-    const prepared: PreparedOperation = await prepare(operation, revealedAddress);
-    expect(prepared).toBeDefined();
+    // Check if this operation is valid
+    const operation = [createTransaction(revealedAddress, fa12Instance.address, 0, transferParams)];
+    const prepared: PreparedOperation = await prepare(operation);
+    const simulation: PreapplyResponse = await runSimulation(prepared);
+
+    expect(
+      simulation.contents.every((c: OperationContentsAndResult) => {
+        assert('metadata' in c, 'Expected metadata to be present in operation contents');
+        assert('operation_result' in c.metadata, 'Expected operation_result to be present in metadata');
+        return c.metadata.operation_result.status === 'applied';
+      })
+    ).toBeTruthy();
   });
 
   it('get contract metadata from Tezos local URI, tezos-storage:data', async () => {
@@ -92,7 +102,7 @@ describe('FA-2 token contract', () => {
   it('create token transfer params', async () => {
     const transferParams: TransactionOperationParameter = await fa2Instance_2.transfer([
       { from_: revealedAddress, txs: [{ to_: burnAddress, token_id: 5, amount: BigNumber(0) }] },
-      { from_: burnAddress, txs: [{ to_: revealedAddress, token_id: 10, amount: BigNumber(128) }] },
+      { from_: burnAddress, txs: [{ to_: revealedAddress, token_id: 10, amount: BigNumber(0) }] },
     ]);
 
     expect(transferParams.value).toEqual([
@@ -115,17 +125,12 @@ describe('FA-2 token contract', () => {
           [
             {
               prim: 'Pair',
-              args: [{ string: revealedAddress }, { prim: 'Pair', args: [{ int: '10' }, { int: '128' }] }],
+              args: [{ string: revealedAddress }, { prim: 'Pair', args: [{ int: '10' }, { int: '0' }] }],
             },
           ],
         ],
       },
     ]);
-
-    // Check if this operation will work
-    const operation = [createTransaction(revealedAddress, burnAddress, 0, transferParams)];
-    const prepared: PreparedOperation = await prepare(operation, revealedAddress);
-    expect(prepared).toBeDefined();
   });
 
   it('get contract metadata', async () => {

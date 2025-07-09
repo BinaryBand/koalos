@@ -56,7 +56,7 @@ export function addressToExpr(address: string): string {
  */
 export function decodeMichelsonValue<T>(value: unknown, schema?: Schema): T | undefined {
   if (schema !== undefined) {
-    const michelson: MichelsonExpressionBase = schema.Encode(value);
+    const michelson: MichelsonV1ExpressionBase = schema.Encode(value);
     if ('bytes' in michelson) {
       return Buffer.from(michelson.bytes, 'hex').toString('utf8') as T;
     } else if ('int' in michelson) {

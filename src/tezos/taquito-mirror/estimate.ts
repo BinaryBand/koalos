@@ -1,11 +1,4 @@
-import {
-  Estimate,
-  EstimateProperties,
-  hasMetadataWithResult,
-  isOpWithFee,
-  isOpWithGasBuffer,
-  PreparedOperation,
-} from '@taquito/taquito';
+import { Estimate, EstimateProperties, hasMetadataWithResult, isOpWithFee, isOpWithGasBuffer } from '@taquito/taquito';
 import {
   ConstantsResponse,
   OperationContentsAndResult,
@@ -103,24 +96,20 @@ function getEstimationContent(
 
 async function calculateEstimates(op: PreparedOperation, constants: ConstantsResponse) {
   const params: ForgeParams = { branch: op.opOb.branch, contents: op.opOb.contents };
-  const opBytes: string = await new LocalForger().forge(params);
+  const forged: string = await new LocalForger().forge(params);
 
-  const operation: RPCSimulateOperationParam = {
-    operation: params,
-    chain_id: await Blockchain.chainId,
-  };
-
+  const operation: RPCSimulateOperationParam = { operation: params, chain_id: await Blockchain.chainId };
   const results: PreapplyResponse = await Blockchain.simulateOperation(operation);
-  const { cost_per_byte, origination_size = 257 } = constants;
 
   let numberOfOps: number = 1;
   if (Array.isArray(op.opOb.contents) && op.opOb.contents.length > 1) {
     numberOfOps = results.contents[0]?.kind === 'reveal' ? op.opOb.contents.length - 1 : op.opOb.contents.length;
   }
 
+  const { cost_per_byte, origination_size = 257 } = constants;
   return results.contents.map((contents: OperationContentsAndResult) => {
     // diff between estimated and injecting OP_SIZE is 124-126, we added buffer to use 130
-    const size: number = contents.kind === 'reveal' ? OP_SIZE_REVEAL / 2 : (opBytes.length + 130) / 2 / numberOfOps;
+    const size: number = contents.kind === 'reveal' ? OP_SIZE_REVEAL / 2 : (forged.length + 130) / 2 / numberOfOps;
     return getEstimationContent(contents, size, cost_per_byte.toNumber(), origination_size);
   });
 }

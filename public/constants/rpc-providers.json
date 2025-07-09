@@ -1,4 +1,6 @@
 [
+  "https://mainnet.api.tez.ie/",
+  "https://prod.tcinfra.net/rpc/mainnet/",
   "https://mainnet.tezos.ecadinfra.com/",
   "https://mainnet.smartpy.io/",
   "https://rpc.tzbeta.net/",

@@ -1,27 +1,12 @@
-type Primitive = string | number | boolean;
+declare type Primitive = string | number | boolean;
 
-type MichelsonExpression = import('@taquito/rpc').MichelsonV1Expression;
-type MichelsonExpressionBase = import('@taquito/rpc').MichelsonV1ExpressionBase;
-type MichelsonExpressionExtended = import('@taquito/rpc').MichelsonV1ExpressionExtended;
+declare type MichelsonV1Expression = import('@taquito/rpc').MichelsonV1Expression;
+declare type MichelsonV1ExpressionBase = import('@taquito/rpc').MichelsonV1ExpressionBase;
+declare type MichelsonV1ExpressionExtended = import('@taquito/rpc').MichelsonV1ExpressionExtended;
+declare type TransactionOperationParameter = import('@taquito/rpc').TransactionOperationParameter;
+declare type ScriptResponse = import('@taquito/rpc').ScriptResponse;
+declare type PreparedOperation = import('@taquito/taquito').PreparedOperation;
 
-type MichelsonView = MichelsonExpressionExtended & {
-  prim: 'pair';
-  args: [MichelsonExpression, { prim: 'contract'; args: [MichelsonExpression] }];
-};
-
-type UnitValue = symbol;
-
-type ContractProvider = import('@taquito/taquito').ContractProvider;
-
-type BigMapAbstraction = import('@taquito/taquito').BigMapAbstraction;
-
-type MichelsonMap<T extends Primitive = Primitive, K = unknown> = import('@taquito/michelson-encoder').MichelsonMap<
-  T,
-  K
->;
-
-type ContractMethodObject = import('@taquito/taquito').ContractMethodObject<ContractProvider>;
-
-type ContractView<T> = import('@taquito/taquito').ContractView & {
-  read: (chainId?: string) => Promise<T>;
-};
+declare type Reveal = import('@/tezos/operations').Reveal;
+declare type Transaction = import('@/tezos/operations').Transaction;
+declare type Operation = import('@/tezos/operations').Operation;

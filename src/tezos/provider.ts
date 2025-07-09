@@ -1,4 +1,4 @@
-import { Signer, TezosToolkit } from '@taquito/taquito';
+import { TezosToolkit } from '@taquito/taquito';
 import {
   BigMapResponse,
   ConstantsResponse,
@@ -10,25 +10,14 @@ import {
 } from '@taquito/rpc';
 import { ContractResponse, EntrypointsResponse, RunViewResult, StorageResponse } from '@taquito/rpc';
 
-import { publicKey, address as pkh, signature } from '@public/constants/stub-values.json';
 import RPC_URLS from '@public/constants/rpc-providers.json';
 import { toExpr } from '@/tezos/codec';
 
 const TaquitoInstances: TezosToolkit[] = RPC_URLS.map((rpc: string) => new TezosToolkit(rpc));
 
-function Tezos(address?: string): TezosToolkit {
+function Tezos(): TezosToolkit {
   const randomIndex: number = Math.floor(Math.random() * TaquitoInstances.length);
-  const tezos: TezosToolkit = TaquitoInstances[randomIndex]!;
-
-  const forgerer: Signer = {
-    secretKey: undefined!,
-    publicKey: async () => publicKey,
-    publicKeyHash: async () => address ?? pkh,
-    sign: async () => ({ bytes: undefined!, sig: signature, prefixSig: signature, sbytes: undefined! }),
-  };
-
-  tezos.setSignerProvider(forgerer);
-  return tezos;
+  return TaquitoInstances[randomIndex]!;
 }
 
 export class Blockchain {
@@ -84,7 +73,7 @@ export class Blockchain {
   public static async runView(
     contract: string,
     entrypoint: string,
-    input: MichelsonExpression,
+    input: MichelsonV1Expression,
     options?: RPCOptions
   ): Promise<RunViewResult> {
     const chain_id: string = await Blockchain.chainId;

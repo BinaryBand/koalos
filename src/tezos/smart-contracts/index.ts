@@ -1,13 +1,18 @@
 export * from '@/tezos/smart-contracts/quipuswap';
 
-import { ContractResponse, EntrypointsResponse, RunViewResult, TransactionOperationParameter } from '@taquito/rpc';
+import { ContractResponse, EntrypointsResponse, RunViewResult } from '@taquito/rpc';
 import { ParameterSchema, Schema } from '@taquito/michelson-encoder';
 
 import { Blockchain } from '@/tezos/provider';
 import { TezosStorage } from '@/tezos/storage';
 import { assert } from '@/tools/utils';
 
-export class Contract {
+type MichelsonView = MichelsonV1ExpressionExtended & {
+  prim: 'pair';
+  args: [MichelsonV1Expression, { prim: 'contract'; args: [MichelsonV1Expression] }];
+};
+
+export class TezosContract {
   constructor(public readonly address: string) {}
 
   public get storage(): Promise<TezosStorage | undefined> {
@@ -16,9 +21,9 @@ export class Contract {
     );
   }
 
-  private isView(view: MichelsonExpression): view is MichelsonView {
+  private isView(view: MichelsonV1Expression): view is MichelsonView {
     if ('prim' in view && view.prim === 'pair' && view.args) {
-      const lastElement: MichelsonExpression | undefined = view.args[view.args.length - 1];
+      const lastElement: MichelsonV1Expression | undefined = view.args[view.args.length - 1];
       return lastElement !== undefined && 'prim' in lastElement && lastElement.prim === 'contract';
     }
 
@@ -35,7 +40,7 @@ export class Contract {
     const methodSchema: ParameterSchema = new ParameterSchema(method);
     new Schema(method).Typecheck(args);
 
-    const transferParameter: MichelsonExpression = methodSchema.EncodeObject(args);
+    const transferParameter: MichelsonV1Expression = methodSchema.EncodeObject(args);
     assert(transferParameter !== undefined, 'Failed to create transfer parameters.');
 
     return { entrypoint, value: transferParameter };

@@ -1,20 +1,35 @@
-import { Estimate, ParamsWithKind, PreparedOperation, withKind } from '@taquito/taquito';
-import { OperationHash, OpKind, TransactionOperationParameter } from '@taquito/rpc';
+import { Estimate, ParamsWithKindExtended, withKind } from '@taquito/taquito';
 import { LocalForger } from '@taquito/local-forging';
+import { OpKind } from '@taquito/rpc';
 import { blake2b } from '@noble/hashes/blake2';
 
-import { extractAddressFromParams, prepareBatch } from '@/tezos/taquito-mirror/prepare';
 import { estimateBatch } from '@/tezos/taquito-mirror/estimate';
+import { prepareBatch } from '@/tezos/taquito-mirror/prepare';
 import { Blockchain } from '@/tezos/provider';
-import { assert } from '@/tools/utils';
+
+export type Reveal = withKind<ParamsWithKindExtended, OpKind.REVEAL> & { source: string; public_key: string };
+export type Transaction = withKind<ParamsWithKindExtended, OpKind.TRANSACTION>;
+export type Operation = Reveal | Transaction;
+
+export { isRevealed } from '@/tezos/taquito-mirror/prepare';
+
+export function createReveal(source: string, public_key: string): Reveal {
+  return { kind: OpKind.REVEAL, source, public_key };
+}
 
 export function createTransaction(
   source: string,
   to: string,
   amount: number,
   parameter?: TransactionOperationParameter
-): withKind<ParamsWithKind, OpKind.TRANSACTION> {
-  return { kind: OpKind.TRANSACTION, source, to, amount, parameter } as withKind<ParamsWithKind, OpKind.TRANSACTION>;
+): Transaction {
+  const transaction: Transaction = { kind: OpKind.TRANSACTION, source, to, amount };
+
+  if (parameter !== undefined) {
+    transaction.parameter = parameter;
+  }
+
+  return transaction;
 }
 
 /**
@@ -28,11 +43,8 @@ export function createTransaction(
  * This function prepares a batch operation, estimates the required resources for each transaction,
  * and updates the transaction contents with the corresponding estimates.
  */
-export async function prepare(batchParams: ParamsWithKind[], publicKey?: string): Promise<PreparedOperation> {
-  const address: string | undefined = extractAddressFromParams(batchParams);
-  assert(address, 'Source address or public key hash is required for batch operation preparation');
-
-  const preparedOperation: PreparedOperation = await prepareBatch(batchParams, publicKey);
+export async function prepare(batchParams: Operation[], address?: string): Promise<PreparedOperation> {
+  const preparedOperation: PreparedOperation = await prepareBatch(batchParams, address);
   const estimates: Estimate[] = await estimateBatch(preparedOperation);
 
   // Apply estimates to each operation content
@@ -81,7 +93,7 @@ export async function forgeOperation({ opOb }: PreparedOperation): Promise<[stri
  * @param signatureHex - The hex string representing the signature bytes for the operation.
  * @returns A promise that resolves to the operation hash (`OperationHash`) of the injected operation.
  */
-export async function sendForgedOperation(forgedHex: string, signatureHex: string): Promise<OperationHash> {
+export async function sendForgedOperation(forgedHex: string, signatureHex: string): Promise<string> {
   const signedOperation: string = forgedHex + signatureHex;
   return Blockchain.injectOperation(signedOperation);
 }

@@ -1,14 +1,10 @@
-import { OpKind, OperationContents, ManagerKeyResponse } from '@taquito/rpc';
+import { ManagerKeyResponse, OpKind, OperationContents } from '@taquito/rpc';
 import {
   DefaultGlobalConstantsProvider,
-  getRevealFee,
-  getRevealGasLimit,
   isOpRequireReveal,
   isOpWithFee,
   OriginateParams,
-  ParamsWithKind,
-  PreparedOperation,
-  RevealParams,
+  ParamsWithKindExtended,
   RPCOperation,
   RPCOpWithFee,
   RPCRevealOperation,
@@ -31,6 +27,12 @@ import { BigNumber } from 'bignumber.js';
 
 import { Blockchain } from '@/tezos/provider';
 import { assert } from '@/tools/utils';
+
+type Limits = {
+  fee?: number;
+  storageLimit?: number;
+  gasLimit?: number;
+};
 
 function mergeLimits(userDefinedLimit: Limits, defaultLimits: Required<Limits>): Required<Limits> {
   return {
@@ -62,7 +64,7 @@ async function findGlobalConstantsHashAndValue(schema: Schema) {
     for (const token of globalConstantTokens) {
       const tokenArgs = token.tokenVal.args;
       if (tokenArgs) {
-        const expression = tokenArgs[0] as MichelsonExpressionBase;
+        const expression = tokenArgs[0] as MichelsonV1ExpressionBase;
         if (expression.string) {
           const hash: string = expression.string;
           const michelineValue = await new DefaultGlobalConstantsProvider().getGlobalConstantByHash(hash);
@@ -103,8 +105,11 @@ async function prepareCodeOrigination(params: OriginateParams): Promise<Originat
   return parsedParams;
 }
 
-async function getRpcOp(params: ParamsWithKind): Promise<RPCOperation> {
+async function getRpcOp(params: ParamsWithKindExtended): Promise<RPCOperation> {
   switch (params.kind) {
+    case OpKind.REVEAL:
+      const { source, public_key } = params as RPCRevealOperation;
+      return createRevealOperation({ ...params }, source!, public_key);
     case OpKind.TRANSACTION:
       return createTransferOperation({ ...params });
     case OpKind.ORIGINATION:
@@ -175,7 +180,7 @@ function constructOpContents(
   });
 }
 
-async function applyLimits(batchParams: ParamsWithKind[]): Promise<RPCOperation[]> {
+async function applyLimits(batchParams: ParamsWithKindExtended[]): Promise<RPCOperation[]> {
   let defaultLimits: Required<Limits> = undefined!;
   if (batchParams.some(isOpWithFee)) {
     const { hard_gas_limit_per_block, hard_gas_limit_per_operation, hard_storage_limit_per_operation } =
@@ -200,36 +205,36 @@ async function applyLimits(batchParams: ParamsWithKind[]): Promise<RPCOperation[
   );
 }
 
-export function extractAddressFromParams(batchParams: ParamsWithKind[]): string | undefined {
+export function extractAddressFromParams(batchParams: ParamsWithKindExtended[]): string | undefined {
   return batchParams
     .map((p) => ('pkh' in p ? p.pkh : 'source' in p ? p.source : undefined))
     .find((x) => x !== undefined);
 }
 
-export async function prepareBatch(batchParams: ParamsWithKind[], publicKey?: string): Promise<PreparedOperation> {
-  const address: string | undefined = extractAddressFromParams(batchParams);
-  assert(address, 'Source address or public key hash is required for batch operation preparation');
+export async function isRevealed(address: string): Promise<boolean> {
+  const manager: ManagerKeyResponse | undefined = await Blockchain.getManagerKey(address);
+  return manager !== undefined && Boolean(typeof manager === 'object' ? manager.key : manager);
+}
+
+export async function needsReveal(batchParams: ParamsWithKindExtended[], address?: string): Promise<boolean> {
+  const revealNeeded: boolean = batchParams.some(isOpRequireReveal);
+  if (!revealNeeded) return false;
+
+  const hasReveal: boolean = batchParams.some((op) => op.kind === OpKind.REVEAL);
+  if (hasReveal) return false;
+
+  address ??= extractAddressFromParams(batchParams)!;
+  return !(await isRevealed(address));
+}
+
+export async function prepareBatch(
+  batchParams: ParamsWithKindExtended[],
+  address?: string
+): Promise<PreparedOperation> {
+  address ??= extractAddressFromParams(batchParams)!;
 
   const operations: RPCOperation[] = await applyLimits(batchParams);
-
-  const managerKeyExists = async () => {
-    const manager: ManagerKeyResponse | undefined = await Blockchain.getManagerKey(address);
-    return manager && Boolean(typeof manager === 'object' ? manager.key : manager);
-  };
-
-  const revealNeeded: boolean = batchParams.some((op) => isOpRequireReveal(op)) && !(await managerKeyExists());
-  if (revealNeeded === true) {
-    assert(publicKey, 'Reveal operation is needed but public key is not defined');
-
-    const revealParams: RevealParams = {
-      fee: getRevealFee(address),
-      storageLimit: 0,
-      gasLimit: getRevealGasLimit(address),
-    };
-
-    const revealOp: RPCRevealOperation = await createRevealOperation(revealParams, address, publicKey);
-    operations.unshift(revealOp);
-  }
+  assert(!(await needsReveal(batchParams, address)), 'Reveal operation is needed but not provided in the batch');
 
   const [branch, { protocol }, contract] = await Promise.all([
     Blockchain.getBlockHash({ block: 'head~2' }),

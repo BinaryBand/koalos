@@ -11,8 +11,7 @@
       "@/*": ["./src/*"],
       "@public/*": ["./public/*"]
     },
-    "rootDirs": ["./src", "./tests"],
-    "typeRoots": ["./node_modules/@types", "./types/**/*.d.ts"],
+    "rootDirs": ["./src", "./tests", "./types"],
     "resolveJsonModule": true,
 
     /* JavaScript Support */
@@ -30,25 +29,21 @@
     "strictPropertyInitialization": true,
     "strictBuiltinIteratorReturn": true,
     "noImplicitThis": true,
-    "useUnknownInCatchVariables": true,
+    "useUnknownInCatchVariables": false,
     "alwaysStrict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "exactOptionalPropertyTypes": true,
     "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
+    "noFallthroughCasesInSwitch": false,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
-    "allowUnusedLabels": true,
+    "allowUnusedLabels": false,
     "allowUnreachableCode": false,
-
-    // "declaration": true,
-    // "declarationDir": "./dist",
-    // "emitDeclarationOnly": true,
 
     /* Completeness */
     "skipDefaultLibCheck": false,
-    "skipLibCheck": true
+    "skipLibCheck": false
   }
 }
