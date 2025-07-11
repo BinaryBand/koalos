@@ -22,7 +22,7 @@ import {
   createTransferTicketOperation,
 } from '@taquito/taquito';
 import { Expr, GlobalConstantHashAndValue, Parser, Prim } from '@taquito/michel-codec';
-import { Schema } from '@taquito/michelson-encoder';
+import { Schema, Token } from '@taquito/michelson-encoder';
 import { BigNumber } from 'bignumber.js';
 
 import { Blockchain } from '@/tezos/provider';
@@ -34,6 +34,8 @@ type Limits = {
   gasLimit?: number;
 };
 
+const PARSER: Parser = new Parser();
+
 function mergeLimits(userDefinedLimit: Limits, defaultLimits: Required<Limits>): Required<Limits> {
   return {
     fee: userDefinedLimit.fee ?? defaultLimits.fee,
@@ -42,74 +44,71 @@ function mergeLimits(userDefinedLimit: Limits, defaultLimits: Required<Limits>):
   };
 }
 
-const P: Parser = new Parser();
 async function formatCodeParam(code: string | object[]): Promise<Expr[]> {
   if (typeof code !== 'string') {
-    const expr: Prim[] = P.parseJSON(code) as Prim[];
+    const expr: Prim[] = PARSER.parseJSON(code) as Prim[];
     const order: string[] = ['parameter', 'storage', 'code'];
     return expr.sort((a, b) => order.indexOf(a.prim) - order.indexOf(b.prim));
   }
 
-  return P.parseScript(code)!;
+  return PARSER.parseScript(code)!;
 }
 
 async function formatInitParam(init: string | object): Promise<Expr> {
-  return typeof init === 'string' ? P.parseMichelineExpression(init)! : P.parseJSON(init);
+  return typeof init === 'string' ? PARSER.parseMichelineExpression(init)! : PARSER.parseJSON(init);
 }
 
-async function findGlobalConstantsHashAndValue(schema: Schema) {
-  const globalConstantTokens = schema.findToken('constant');
+async function findGlobalConstantsHashAndValue(schema: Schema): Promise<GlobalConstantHashAndValue> {
+  const globalConstantTokens: Token[] = schema.findToken('constant');
+  if (globalConstantTokens.length === 0) return {};
+
   const globalConstantsHashAndValue: GlobalConstantHashAndValue = {};
-  if (globalConstantTokens.length !== 0) {
-    for (const token of globalConstantTokens) {
-      const tokenArgs = token.tokenVal.args;
-      if (tokenArgs) {
-        const expression = tokenArgs[0] as MichelsonV1ExpressionBase;
-        if (expression.string) {
-          const hash: string = expression.string;
-          const michelineValue = await new DefaultGlobalConstantsProvider().getGlobalConstantByHash(hash);
-          Object.assign(globalConstantsHashAndValue, {
-            [hash]: michelineValue,
-          });
-        }
-      }
+  for (const expression of globalConstantTokens.map((t: Token) => t.tokenVal.args?.[0])) {
+    if (expression && 'string' in expression && expression.string !== undefined) {
+      const hash: string = expression.string;
+      const michelineValue: Expr = await new DefaultGlobalConstantsProvider().getGlobalConstantByHash(hash);
+      Object.assign(globalConstantsHashAndValue, { [hash]: michelineValue });
     }
   }
+
   return globalConstantsHashAndValue;
 }
 
-async function prepareCodeOrigination(params: OriginateParams): Promise<OriginateParams> {
-  const parsedParams = params;
-  parsedParams.code = await formatCodeParam(params.code);
+export async function prepareCodeOrigination(params: OriginateParams): Promise<OriginateParams> {
+  params.code = await formatCodeParam(params.code);
+
   if (params.init) {
-    parsedParams.init = await formatInitParam(params.init);
-  } else if (params.storage) {
-    const storageType = (parsedParams.code as Expr[]).find((p): p is Prim => 'prim' in p && p.prim === 'storage');
-    if (!storageType?.args) {
-      throw new Error('The storage section is missing from the script');
-    }
+    const init: Expr = await formatInitParam(params.init);
+    return { ...params, init };
+  }
+
+  if (params.storage !== undefined) {
+    const storageType: Prim = params.code.find((p): p is Prim => 'prim' in p && p.prim === 'storage')!;
+    assert(storageType?.args, 'The storage section is missing from the script');
+
     const schema: Schema = new Schema(storageType.args[0]!);
-    const globalConstantsHashAndValue = await findGlobalConstantsHashAndValue(schema);
+    const globalConstantsHashAndValue: GlobalConstantHashAndValue = await findGlobalConstantsHashAndValue(schema);
 
     if (Object.keys(globalConstantsHashAndValue).length !== 0) {
-      const p = new Parser({ expandGlobalConstant: globalConstantsHashAndValue });
+      const p: Parser = new Parser({ expandGlobalConstant: globalConstantsHashAndValue });
       const storageTypeNoGlobalConst = p.parseJSON(storageType.args[0]!);
-      const schemaNoGlobalConst = new Schema(storageTypeNoGlobalConst);
-      parsedParams.init = schemaNoGlobalConst.Encode(params.storage);
+      const schemaNoGlobalConst: Schema = new Schema(storageTypeNoGlobalConst);
+      params.init = schemaNoGlobalConst.Encode(params.storage);
     } else {
-      parsedParams.init = schema.Encode(params.storage);
+      params.init = schema.Encode(params.storage);
     }
 
-    delete parsedParams.storage;
+    delete params.storage;
   }
-  return parsedParams;
+
+  return params;
 }
 
 async function getRpcOp(params: ParamsWithKindExtended): Promise<RPCOperation> {
   switch (params.kind) {
     case OpKind.REVEAL:
       const { source, public_key } = params as RPCRevealOperation;
-      return createRevealOperation({ ...params }, source!, public_key);
+      return createRevealOperation({ ...params }, source!, public_key!);
     case OpKind.TRANSACTION:
       return createTransferOperation({ ...params });
     case OpKind.ORIGINATION:
@@ -133,13 +132,10 @@ async function getRpcOp(params: ParamsWithKindExtended): Promise<RPCOperation> {
   }
 }
 
-function constructOpContents(
-  ops: RPCOperation[],
-  headCounter: number,
-  source: string,
-  counters: Record<string, number> = {}
-): OperationContents[] {
-  function getFee(op: RPCOpWithFee, address: string, headCounter: number) {
+function constructOpContents(ops: RPCOperation[], headCounter: number, source: string): OperationContents[] {
+  const counters: Record<string, number> = {};
+
+  const getFee = (op: RPCOpWithFee, address: string, headCounter: number) => {
     if (!counters[address] || counters[address] < headCounter) {
       counters[address] = headCounter;
     }
@@ -151,7 +147,7 @@ function constructOpContents(
       gas_limit: `${op.gas_limit ?? 0}`,
       storage_limit: `${op.storage_limit ?? 0}`,
     };
-  }
+  };
 
   return ops.map((op: RPCOperation) => {
     switch (op.kind) {
@@ -199,19 +195,31 @@ async function applyLimits(batchParams: ParamsWithKindExtended[]): Promise<RPCOp
   }
 
   return Promise.all(
-    batchParams
-      .map((op) => (isOpWithFee(op) ? getRpcOp({ ...op, ...mergeLimits(op, defaultLimits) }) : Promise.resolve(op)))
-      .flat()
+    batchParams.map((op) => (isOpWithFee(op) ? getRpcOp({ ...op, ...mergeLimits(op, defaultLimits) }) : op)).flat()
   );
 }
 
+type AddressCandidates = {
+  pkh: string;
+  source: string;
+  delegate: string;
+};
+
 export function extractAddressFromParams(batchParams: ParamsWithKindExtended[]): string | undefined {
-  return batchParams
-    .map((p) => ('pkh' in p ? p.pkh : 'source' in p ? p.source : undefined))
-    .find((x) => x !== undefined);
+  const candidates: AddressCandidates = batchParams.reduce(
+    (acc: AddressCandidates, op: ParamsWithKindExtended) => {
+      acc.pkh ||= 'pkh' in op ? op.pkh : acc.pkh;
+      acc.source ||= 'source' in op ? op.source : acc.source;
+      acc.delegate ||= 'delegate' in op ? op.delegate : acc.delegate;
+      return acc;
+    },
+    { pkh: '', source: '', delegate: '' }
+  );
+
+  return candidates.pkh || candidates.source || candidates.delegate;
 }
 
-export async function isRevealed(address: string): Promise<boolean> {
+export async function checkRevealed(address: string): Promise<boolean> {
   const manager: ManagerKeyResponse | undefined = await Blockchain.getManagerKey(address);
   return manager !== undefined && Boolean(typeof manager === 'object' ? manager.key : manager);
 }
@@ -224,7 +232,7 @@ export async function needsReveal(batchParams: ParamsWithKindExtended[], address
   if (hasReveal) return false;
 
   address ??= extractAddressFromParams(batchParams)!;
-  return !(await isRevealed(address));
+  return !(await checkRevealed(address));
 }
 
 export async function prepareBatch(
