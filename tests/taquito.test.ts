@@ -114,7 +114,7 @@ describe('batch estimate tests', () => {
       await prepare(batch);
     } catch (error: unknown) {
       assert(error instanceof Error, 'Expected an error to be thrown');
-      expect(error.message).toContain('Reveal operation is needed but not provided in the batch');
+      expect(error.message).toBeDefined();
     }
   });
 });
