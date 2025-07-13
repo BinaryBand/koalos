@@ -1,10 +1,9 @@
-import { Estimate, ParamsWithKind, Signer, TezosToolkit } from '@taquito/taquito';
-import { OperationContentsAndResult, PreapplyResponse } from '@taquito/rpc';
+import { Estimate, hasMetadataWithResult, ParamsWithKind, Signer, TezosToolkit } from '@taquito/taquito';
+import { PreapplyResponse } from '@taquito/rpc';
 
-import { createReveal, createTransaction, prepare } from '@/index';
-import { prepareBatch } from '@/tezos/taquito-mirror/prepare';
+import { createReveal, createTransaction, prepare, simulateOperation } from '@/index';
 import { estimateBatch } from '@/tezos/taquito-mirror/estimate';
-import { runSimulation } from 'jest.setup';
+import { prepareBatch } from '@/tezos/taquito-mirror/prepare';
 import { assert } from '@/tools/utils';
 
 import { burnPublicKey, burnAddress, revealedAddress } from '@public/tests/wallet.json';
@@ -26,15 +25,17 @@ const BURN_ADDRESS_SIGNER: Signer = {
 const toolkit: TezosToolkit = new TezosToolkit(RPC_URLS[Math.floor(Math.random() * RPC_URLS.length)]!);
 
 describe('preparation tests', () => {
-  it('prepare basic transaction batch', async () => {
+  it('prepare basic transaction', async () => {
     toolkit.setSignerProvider(DEFAULT_SIGNER);
+
     const batch: Transaction[] = [createTransaction(revealedAddress, burnAddress, 0.001)];
+
     const test: PreparedOperation = await prepareBatch(batch);
     const control: PreparedOperation = await toolkit.prepare.batch(batch);
     expect(test).toEqual(control);
   });
 
-  it('prepare batch transaction', async () => {
+  it('prepare batched transactions', async () => {
     toolkit.setSignerProvider(DEFAULT_SIGNER);
 
     const batch: Transaction[] = [
@@ -47,23 +48,23 @@ describe('preparation tests', () => {
     expect(test).toEqual(control);
   });
 
-  it('prepare transaction with reveal requirement', async () => {
+  it('prepare transaction batch with reveal requirement', async () => {
     toolkit.setSignerProvider(BURN_ADDRESS_SIGNER);
 
     const batch: Operation[] = [
       createReveal(burnAddress, burnPublicKey),
-      createTransaction(burnAddress, revealedAddress, 0.0001),
+      createTransaction(burnAddress, revealedAddress, 0.001),
+      createTransaction(burnAddress, revealedAddress, 0.00025),
+      createTransaction(burnAddress, revealedAddress, 0.0005),
+      createTransaction(burnAddress, revealedAddress, 0.00075),
     ];
 
     const prepared: PreparedOperation = await prepare(batch);
-    const simulation: PreapplyResponse = await runSimulation(prepared);
-    expect(
-      simulation.contents.every((c: OperationContentsAndResult) => {
-        assert('metadata' in c, 'Expected metadata to be present in operation contents');
-        assert('operation_result' in c.metadata, 'Expected operation_result to be present in metadata');
-        return c.metadata.operation_result.status === 'applied';
-      })
-    ).toBeTruthy();
+    const simulation: PreapplyResponse = await simulateOperation(prepared);
+    simulation.contents.forEach((c) => {
+      assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
+      expect(c.metadata.operation_result).toMatchObject({ status: 'applied' });
+    });
   });
 });
 
@@ -72,8 +73,10 @@ describe('batch estimate tests', () => {
     toolkit.setSignerProvider(DEFAULT_SIGNER);
 
     const batch: Operation[] = [
-      createTransaction(revealedAddress, burnAddress, 0.0001),
       createTransaction(revealedAddress, burnAddress, 0.001),
+      createTransaction(revealedAddress, burnAddress, 0.00025),
+      createTransaction(revealedAddress, burnAddress, 0.0005),
+      createTransaction(revealedAddress, burnAddress, 0.00075),
     ];
 
     const preparedOperation: PreparedOperation = await prepareBatch(batch);
@@ -92,14 +95,11 @@ describe('batch estimate tests', () => {
     ];
 
     const prepared: PreparedOperation = await prepare(batch);
-    const simulation: PreapplyResponse = await runSimulation(prepared);
-    expect(
-      simulation.contents.every((c: OperationContentsAndResult) => {
-        assert('metadata' in c, 'Expected metadata to be present in operation contents');
-        assert('operation_result' in c.metadata, 'Expected operation_result to be present in metadata');
-        return c.metadata.operation_result.status === 'applied';
-      })
-    ).toBeTruthy();
+    const simulation: PreapplyResponse = await simulateOperation(prepared);
+    simulation.contents.forEach((c) => {
+      assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
+      expect(c.metadata.operation_result).toMatchObject({ status: 'applied' });
+    });
   });
 
   it('estimate batch without required reveal', async () => {
@@ -114,7 +114,7 @@ describe('batch estimate tests', () => {
       await prepare(batch);
     } catch (error: unknown) {
       assert(error instanceof Error, 'Expected an error to be thrown');
-      expect(error.message).toBeDefined();
+      expect(typeof error.message).toBe('string');
     }
   });
 });

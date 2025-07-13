@@ -2,7 +2,7 @@ import { castToBigNumber } from '@taquito/rpc';
 import { MichelsonMap, UnitValue } from '@taquito/michelson-encoder';
 import { BigNumber } from 'bignumber.js';
 
-import { unwrapMichelsonMap } from '@/tezos/codec';
+import { unwrapMichelsonMap } from '@/tezos/encoders';
 import {
   Fa2Balance,
   Fa2BalanceRequest,

@@ -1,8 +1,8 @@
-import { OperationContentsAndResult, PreapplyResponse } from '@taquito/rpc';
-import { runSimulation } from 'jest.setup';
+import { hasMetadataWithResult } from '@taquito/taquito';
+import { PreapplyResponse } from '@taquito/rpc';
 import { BigNumber } from 'bignumber.js';
 
-import { createTransaction, prepare, Fa12Token, Fa2Token } from '@/index';
+import { createTransaction, prepare, Fa12Token, Fa2Token, simulateOperation } from '@/index';
 import { Fa2Balance, TZip17Metadata, TZip21TokenMetadata } from '@/tezos/types';
 import { assert } from '@/tools/utils';
 
@@ -42,17 +42,13 @@ describe('FA-1.2 token contract', () => {
     });
 
     // Check if this operation is valid
-    const operation = [createTransaction(revealedAddress, fa12Instance.address, 0, transferParams)];
-    const prepared: PreparedOperation = await prepare(operation);
-    const simulation: PreapplyResponse = await runSimulation(prepared);
-
-    expect(
-      simulation.contents.every((c: OperationContentsAndResult) => {
-        assert('metadata' in c, 'Expected metadata to be present in operation contents');
-        assert('operation_result' in c.metadata, 'Expected operation_result to be present in metadata');
-        return c.metadata.operation_result.status === 'applied';
-      })
-    ).toBeTruthy();
+    const batch = [createTransaction(revealedAddress, fa12Instance.address, 0, transferParams)];
+    const prepared: PreparedOperation = await prepare(batch);
+    const simulation: PreapplyResponse = await simulateOperation(prepared);
+    simulation.contents.forEach((c) => {
+      assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
+      expect(c.metadata.operation_result).toMatchObject({ status: 'applied' });
+    });
   });
 
   it('get contract metadata from Tezos local URI, tezos-storage:data', async () => {
@@ -99,10 +95,10 @@ describe('FA-2 token contract', () => {
     expect(balances[4]?.balance.toNumber()).toBe(19376); // ETH
   });
 
-  it('create token transfer params', async () => {
+  it('create token multiple transfer params', async () => {
     const transferParams: TransactionOperationParameter = await fa2Instance_2.transfer([
       { from_: revealedAddress, txs: [{ to_: burnAddress, token_id: 5, amount: BigNumber(0) }] },
-      { from_: burnAddress, txs: [{ to_: revealedAddress, token_id: 10, amount: BigNumber(0) }] },
+      { from_: revealedAddress, txs: [{ to_: burnAddress, token_id: 10, amount: BigNumber(0) }] },
     ]);
 
     expect(transferParams.value).toEqual([
@@ -121,16 +117,25 @@ describe('FA-2 token contract', () => {
       {
         prim: 'Pair',
         args: [
-          { string: burnAddress },
+          { string: revealedAddress },
           [
             {
               prim: 'Pair',
-              args: [{ string: revealedAddress }, { prim: 'Pair', args: [{ int: '10' }, { int: '0' }] }],
+              args: [{ string: burnAddress }, { prim: 'Pair', args: [{ int: '10' }, { int: '0' }] }],
             },
           ],
         ],
       },
     ]);
+
+    const batch: Operation[] = [createTransaction(revealedAddress, fa2Instance_2.address, 0, transferParams)];
+
+    const prepared: PreparedOperation = await prepare(batch);
+    const simulation: PreapplyResponse = await simulateOperation(prepared);
+    simulation.contents.forEach((c) => {
+      assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
+      expect(c.metadata.operation_result).toMatchObject({ status: 'applied' });
+    });
   });
 
   it('get contract metadata', async () => {

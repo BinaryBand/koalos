@@ -29,7 +29,7 @@
     "strictPropertyInitialization": true,
     "strictBuiltinIteratorReturn": true,
     "noImplicitThis": true,
-    "useUnknownInCatchVariables": false,
+    "useUnknownInCatchVariables": true,
     "alwaysStrict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -44,6 +44,6 @@
 
     /* Completeness */
     "skipDefaultLibCheck": false,
-    "skipLibCheck": false
+    "skipLibCheck": true
   }
 }

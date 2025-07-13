@@ -1,0 +1,52 @@
+{
+  "code": [
+    {
+      "prim": "storage",
+      "args": [
+        {
+          "prim": "pair",
+          "args": [
+            { "prim": "int", "annots": ["%my_parameter_1"] },
+            { "prim": "int", "annots": ["%my_parameter_2"] }
+          ]
+        }
+      ]
+    },
+    { "prim": "parameter", "args": [{ "prim": "int", "annots": ["%my_entrypoint"] }] },
+    {
+      "prim": "code",
+      "args": [
+        [
+          { "prim": "UNPAIR" },
+          { "prim": "PUSH", "args": [{ "prim": "int" }, { "int": "123" }] },
+          { "prim": "DUP", "args": [{ "int": "3" }] },
+          { "prim": "CAR" },
+          { "prim": "COMPARE" },
+          { "prim": "LE" },
+          {
+            "prim": "IF",
+            "args": [
+              [],
+              [
+                {
+                  "prim": "PUSH",
+                  "args": [{ "prim": "string" }, { "string": "Assert failure: self.data.my_parameter_1 <= 123" }]
+                },
+                { "prim": "FAILWITH" }
+              ]
+            ]
+          },
+          { "prim": "SWAP" },
+          { "prim": "DUP" },
+          { "prim": "CAR" },
+          { "prim": "DIG", "args": [{ "int": "2" }] },
+          { "prim": "ADD" },
+          { "prim": "UPDATE", "args": [{ "int": "1" }] },
+          { "prim": "NIL", "args": [{ "prim": "operation" }] },
+          { "prim": "PAIR" }
+        ]
+      ]
+    }
+  ],
+  "storage": { "prim": "Pair", "args": [{ "int": "12" }, { "int": "123" }] }
+}

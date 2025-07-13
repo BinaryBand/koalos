@@ -1,41 +1,59 @@
-import { BytesLiteral, MichelsonData, MichelsonType, packDataBytes } from '@taquito/michel-codec';
-import { MichelsonMap, MichelsonMapKey, Schema } from '@taquito/michelson-encoder';
+import { MichelsonMap, Schema } from '@taquito/michelson-encoder';
+import { BytesLiteral, packDataBytes } from '@taquito/michel-codec';
 import { b58cencode, prefix } from '@taquito/utils';
 import { blake2b } from '@noble/hashes/blake2';
 import { BigNumber } from 'bignumber.js';
 import { assert } from '@/tools/utils';
 
-export function pack(data: MichelsonData, type?: MichelsonType): BytesLiteral {
-  return packDataBytes(data, type);
-}
+export { packDataBytes, BytesLiteral } from '@taquito/michel-codec';
 
+/**
+ * Packs a primitive value into a Tezos-compatible byte representation.
+ *
+ * Depending on the type of the input `data`, this function serializes the value
+ * as a Michelson primitive suitable for use in Tezos smart contracts.
+ *
+ * @param data - The primitive value to pack. Can be a string, number, or boolean.
+ * @param prim - (Optional) The Michelson primitive type to use for packing.
+ *               Accepts 'address', 'string', 'int', 'nat', or 'bool'.
+ *               If not provided, the type is inferred from `data`.
+ * @returns The packed data as a `BytesLiteral`.
+ * @throws Will throw an error if the provided `prim` does not match the type of `data`.
+ */
 export function toPacked(data: Primitive, prim?: 'address' | 'string' | 'int' | 'nat' | 'bool'): BytesLiteral {
   if (typeof data === 'string') {
     assert(prim === undefined || prim === 'address' || prim === 'string', 'Invalid type for string');
-    return pack({ string: data }, { prim: prim ?? 'string' });
+    return packDataBytes({ string: data }, { prim: prim ?? 'string' });
   }
 
   if (typeof data === 'number') {
     assert(prim === undefined || prim === 'int' || prim === 'nat', 'Invalid type for number');
-    return pack({ int: data.toString() }, { prim: prim ?? 'int' });
+    return packDataBytes({ int: data.toString() }, { prim: prim ?? 'int' });
   }
 
   if (typeof data === 'boolean') {
     assert(prim === undefined || prim === 'bool', 'Invalid type for boolean');
-    return pack({ prim: data ? 'True' : 'False' }, { prim: prim ?? 'bool' });
+    return packDataBytes({ prim: data ? 'True' : 'False' }, { prim: prim ?? 'bool' });
   }
 
-  return pack({ string: data });
+  return packDataBytes({ string: data });
 }
 
+/**
+ * Encodes the given Michelson primitive data into a Tezos expression hash (expr).
+ *
+ * @param data - The Michelson primitive value to encode.
+ * @param prim - (Optional) The expected primitive type of the data ('address', 'string', 'int', 'nat', or 'bool').
+ * @returns The base58-encoded Tezos expression hash (expr) of the packed data.
+ *
+ * @remarks
+ * This function first packs the provided data, computes its Blake2b hash (32 bytes),
+ * and then encodes the hash using the Tezos base58 'expr' prefix.
+ */
 export function toExpr(data: Primitive, prim?: 'address' | 'string' | 'int' | 'nat' | 'bool'): string {
   const { bytes } = toPacked(data, prim);
   const hash: Uint8Array = blake2b(Buffer.from(bytes, 'hex'), { dkLen: 32 });
   return b58cencode(hash, prefix.expr);
-}
-
-export function addressToExpr(address: string): string {
-  return toExpr(address, 'address');
 }
 
 /**
@@ -85,14 +103,10 @@ export function decodeMichelsonValue<T>(value: unknown, schema?: Schema): T | un
  *
  * @template T - The expected output object type.
  * @param michelsonMap - The MichelsonMap to unwrap.
- * @param contractAddress - (Optional) The contract address, used for resolving TZIP-16 metadata if present.
  * @returns A promise that resolves to the unwrapped object of type `T`.
  */
-export function unwrapMichelsonMap<T extends Record<string, unknown>>(
-  michelsonMap: MichelsonMap<MichelsonMapKey, unknown>,
-  contractAddress?: string
-): T {
-  const result: Record<string, unknown> = {};
+export function unwrapMichelsonMap<T extends Record<string, any>>(michelsonMap: MichelsonMap<Primitive, any>): T {
+  const result: Record<string, any> = {};
   const valueSchema: Schema | undefined = michelsonMap['valueSchema'];
 
   for (const [key, value] of michelsonMap.entries()) {
@@ -101,7 +115,7 @@ export function unwrapMichelsonMap<T extends Record<string, unknown>>(
 
     // Recursively unwrap nested maps or unpack primitive values
     if (MichelsonMap.isMichelsonMap(value)) {
-      result[key] = unwrapMichelsonMap(value, contractAddress);
+      result[key] = unwrapMichelsonMap(value);
     } else if (valueSchema !== undefined) {
       result[key] = decodeMichelsonValue(value, valueSchema);
     } else {

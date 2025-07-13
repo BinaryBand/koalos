@@ -1,15 +1,23 @@
 import { b58cdecode, b58cencode, prefix, verifySignature } from '@taquito/utils';
-import { OperationContentsAndResult, PreapplyResponse } from '@taquito/rpc';
+import { hasMetadataWithResult, OpKind } from '@taquito/taquito';
+import { PreapplyResponse } from '@taquito/rpc';
 import { InMemorySigner } from '@taquito/signer';
-import { OpKind } from '@taquito/taquito';
 import { ed25519 } from '@noble/curves/ed25519';
-import { runSimulation } from 'jest.setup';
 import { assert } from '@/tools/utils';
 
-import { createReveal, createTransaction, forgeOperation, prepare } from '@/index';
+import {
+  checkRevealed,
+  createReveal,
+  createTransaction,
+  createOrigination,
+  forgeOperation,
+  prepare,
+  simulateOperation,
+} from '@/index';
 
 import { burnPublicKey, burnAddress, revealedAddress } from '@public/tests/wallet.json';
 import { secretKey, publicKey, branch, protocol } from '@public/constants/stub-values.json';
+import { code, storage } from '@public/tests/simple-contract.json';
 
 const DEFAULT_SIGNER: InMemorySigner = new InMemorySigner(secretKey);
 const WATERMARK: Uint8Array = new Uint8Array([0x03]);
@@ -21,18 +29,28 @@ function sign(operationHash: string): string {
   return Buffer.from(sig).toString('hex');
 }
 
+describe('reveal tests', () => {
+  it('check if address is revealed', async () => {
+    const isRevealed: boolean = await checkRevealed(revealedAddress);
+    expect(isRevealed).toBeTruthy();
+  });
+
+  it('check if address is not revealed', async () => {
+    const isRevealed: boolean = await checkRevealed(burnAddress);
+    expect(isRevealed).toBeFalsy();
+  });
+});
+
 describe('operation tests', () => {
   it('verify simple operation', async () => {
     const batch: Operation[] = [createTransaction(revealedAddress, burnAddress, 0.0001)];
-    const operation: PreparedOperation = await prepare(batch);
-    const simulation: PreapplyResponse = await runSimulation(operation);
-    expect(
-      simulation.contents.every((c: OperationContentsAndResult) => {
-        assert('metadata' in c, 'Expected metadata to be present in operation contents');
-        assert('operation_result' in c.metadata, 'Expected operation_result to be present in metadata');
-        return c.metadata.operation_result.status === 'applied';
-      })
-    ).toBeTruthy();
+
+    const prepared: PreparedOperation = await prepare(batch);
+    const simulation: PreapplyResponse = await simulateOperation(prepared);
+    simulation.contents.forEach((c) => {
+      assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
+      expect(c.metadata.operation_result).toMatchObject({ status: 'applied' });
+    });
   });
 
   it('verify batched operation', async () => {
@@ -40,32 +58,55 @@ describe('operation tests', () => {
       createTransaction(revealedAddress, burnAddress, 0.0001),
       createTransaction(revealedAddress, burnAddress, 0.001),
     ];
-    const operation: PreparedOperation = await prepare(batch);
-    const simulation: PreapplyResponse = await runSimulation(operation);
-    expect(
-      simulation.contents.every((c: OperationContentsAndResult) => {
-        assert('metadata' in c, 'Expected metadata to be present in operation contents');
-        assert('operation_result' in c.metadata, 'Expected operation_result to be present in metadata');
-        return c.metadata.operation_result.status === 'applied';
-      })
-    ).toBeTruthy();
+
+    const prepared: PreparedOperation = await prepare(batch);
+    const simulation: PreapplyResponse = await simulateOperation(prepared);
+    simulation.contents.forEach((c) => {
+      assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
+      expect(c.metadata.operation_result).toMatchObject({ status: 'applied' });
+    });
   });
 
-  it('verify operation with reveal requirement', async () => {
+  it('verify batch with reveal requirement', async () => {
     const batch: Operation[] = [
       createReveal(burnAddress, burnPublicKey),
       createTransaction(burnAddress, revealedAddress, 0.0001),
       createTransaction(burnAddress, revealedAddress, 0.001),
     ];
-    const operation: PreparedOperation = await prepare(batch);
-    const simulation: PreapplyResponse = await runSimulation(operation);
-    expect(
-      simulation.contents.every((c: OperationContentsAndResult) => {
-        assert('metadata' in c, 'Expected metadata to be present in operation contents');
-        assert('operation_result' in c.metadata, 'Expected operation_result to be present in metadata');
-        return c.metadata.operation_result.status === 'applied';
-      })
-    ).toBeTruthy();
+
+    const prepared: PreparedOperation = await prepare(batch);
+    const simulation: PreapplyResponse = await simulateOperation(prepared);
+    simulation.contents.forEach((c) => {
+      assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
+      expect(c.metadata.operation_result).toMatchObject({ status: 'applied' });
+    });
+  });
+
+  it('verify batch without required reveal', async () => {
+    const batch: Operation[] = [
+      createTransaction(burnAddress, revealedAddress, 0.0001),
+      createTransaction(burnAddress, revealedAddress, 0.001),
+    ];
+
+    try {
+      await prepare(batch);
+    } catch (error: unknown) {
+      assert(error instanceof Error, 'Expected an error to be thrown');
+      expect(typeof error.message).toBe('string');
+    }
+  });
+});
+
+describe('smart contracts', () => {
+  it('prepare code origination params', async () => {
+    const batch: Operation[] = [await createOrigination(revealedAddress, code, storage)];
+
+    const prepared: PreparedOperation = await prepare(batch);
+    const simulation: PreapplyResponse = await simulateOperation(prepared);
+    simulation.contents.forEach((c) => {
+      assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
+      expect(c.metadata.operation_result).toMatchObject({ status: 'applied' });
+    });
   });
 });
 

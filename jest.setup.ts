@@ -19,7 +19,6 @@ import RPC_URLS from '@public/constants/rpc-providers.json';
 import { burnAddress } from '@public/tests/wallet.json';
 
 import { fetchAndCache } from '@/tools/cache';
-import { Blockchain } from '@/tezos/provider';
 
 const BLOCK_DELAY: number = BigNumber(CONSTANTS.minimal_block_delay).toNumber() * 1000; // In seconds
 const BLOCKS_PER_CYCLE: number = BigNumber(CONSTANTS.blocks_per_cycle).toNumber();
@@ -49,15 +48,6 @@ function quickHash(seed: string, ...salt: string[]): string {
 function mockNum(seed: string, modulo: number = Number.MAX_SAFE_INTEGER): BigNumber {
   const mockNumber: BigNumber = Array.from(seed).reduce((acc, c) => acc.plus(c.charCodeAt(0)), BigNumber(7));
   return mockNumber.pow(seed.charCodeAt(seed.length - 3), modulo).plus(modulo);
-}
-
-export async function runSimulation(op: PreparedOperation) {
-  const operation: RPCSimulateOperationParam = {
-    operation: { branch: op.opOb.branch, contents: op.opOb.contents },
-    chain_id: await Blockchain.chainId,
-  };
-
-  return Blockchain.simulateOperation(operation);
 }
 
 jest.mock('@/tools/ipfs', () => ({

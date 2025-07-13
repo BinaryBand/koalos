@@ -1,22 +1,42 @@
 import { Estimate, ParamsWithKindExtended, withKind } from '@taquito/taquito';
+import { OperationContents, OpKind, PreapplyResponse, RPCOptions } from '@taquito/rpc';
 import { LocalForger } from '@taquito/local-forging';
-import { OpKind } from '@taquito/rpc';
+
 import { blake2b } from '@noble/hashes/blake2';
 
-import { estimateBatch } from '@/tezos/taquito-mirror/estimate';
 import { prepareBatch } from '@/tezos/taquito-mirror/prepare';
+import { estimateBatch } from '@/tezos/taquito-mirror/estimate';
 import { Blockchain } from '@/tezos/provider';
 
 export type Reveal = withKind<ParamsWithKindExtended, OpKind.REVEAL> & { source: string; public_key: string };
 export type Transaction = withKind<ParamsWithKindExtended, OpKind.TRANSACTION>;
-export type Operation = Reveal | Transaction;
+export type Origination = withKind<ParamsWithKindExtended, OpKind.ORIGINATION>;
+export type Operation = Reveal | Transaction | Origination;
 
-export { isRevealed } from '@/tezos/taquito-mirror/prepare';
+export { checkRevealed } from '@/tezos/taquito-mirror/prepare';
 
+const FORGER: LocalForger = new LocalForger();
+
+/**
+ * Creates a Tezos reveal operation object.
+ *
+ * @param source - The address of the account revealing its public key.
+ * @param public_key - The public key to be revealed.
+ * @returns A `Reveal` operation object with the specified source and public key.
+ */
 export function createReveal(source: string, public_key: string): Reveal {
   return { kind: OpKind.REVEAL, source, public_key };
 }
 
+/**
+ * Creates a Tezos transaction operation object.
+ *
+ * @param source - The address initiating the transaction.
+ * @param to - The recipient address of the transaction.
+ * @param amount - The amount to transfer in the transaction.
+ * @param parameter - (Optional) Additional parameters for the transaction operation.
+ * @returns A `Transaction` object representing the transaction operation.
+ */
 export function createTransaction(
   source: string,
   to: string,
@@ -30,6 +50,22 @@ export function createTransaction(
   }
 
   return transaction;
+}
+
+// Create an upload Tezos contract operation
+/**
+ * Creates an origination operation for a Tezos smart contract.
+ *
+ * @param code - The Michelson code of the contract as a MichelsonV1Expression.
+ * @param storage - The initial storage for the contract as a MichelsonV1Expression.
+ * @returns An Origination object representing the origination operation.
+ */
+export async function createOrigination(
+  delegate: string,
+  code: MichelsonV1Expression[],
+  init: MichelsonV1Expression
+): Promise<Origination> {
+  return { kind: OpKind.ORIGINATION, delegate, code, init };
 }
 
 /**
@@ -49,8 +85,8 @@ export async function prepare(batchParams: Operation[], address?: string): Promi
 
   // Apply estimates to each operation content
   for (let i: number = 0; i < preparedOperation.opOb.contents.length; i++) {
-    const content = preparedOperation.opOb.contents[i]!;
-    const estimate = estimates[i]!;
+    const content: OperationContents = preparedOperation.opOb.contents[i]!;
+    const estimate: Estimate = estimates[i]!;
 
     if ('fee' in content) content.fee = `${estimate?.suggestedFeeMutez ?? content.fee}`;
     if ('gas_limit' in content) content.gas_limit = `${estimate?.gasLimit ?? content.gas_limit}`;
@@ -72,10 +108,8 @@ export async function prepare(batchParams: Operation[], address?: string): Promi
  * This function retrieves the current block hash, forges the operation using the provided contents,
  * and computes the Blake2b hash of the forged bytes (prefixed with '03'). The hash can be used for signing.
  */
-const Forger: LocalForger = new LocalForger();
 export async function forgeOperation({ opOb }: PreparedOperation): Promise<[string, string]> {
-  // const branch: string = await TezosRpc().getBlockHash({ block: 'head~2' });
-  const opBytes: string = await Forger.forge(opOb);
+  const opBytes: string = await FORGER.forge(opOb);
 
   // Ask the sender to sign this hash
   const payload: Uint8Array = Buffer.from('03' + opBytes, 'hex');
@@ -83,6 +117,23 @@ export async function forgeOperation({ opOb }: PreparedOperation): Promise<[stri
   const hexHash: string = Buffer.from(bytesHash).toString('hex');
 
   return [opBytes, hexHash];
+}
+
+/**
+ * Simulates a Tezos blockchain operation without injecting it.
+ *
+ * @param op - The prepared operation to simulate.
+ * @param options - Optional RPC options for the simulation request.
+ * @returns A promise that resolves to the preapply response of the simulated operation.
+ */
+export async function simulateOperation(op: PreparedOperation, options?: RPCOptions): Promise<PreapplyResponse> {
+  return Blockchain.simulateOperation(
+    {
+      operation: { branch: op.opOb.branch, contents: op.opOb.contents },
+      chain_id: await Blockchain.chainId,
+    },
+    options
+  );
 }
 
 /**

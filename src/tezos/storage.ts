@@ -2,7 +2,7 @@ import { MichelsonMap, Schema, Token } from '@taquito/michelson-encoder';
 import { BigMapResponse, ContractResponse } from '@taquito/rpc';
 import { BigNumber } from 'bignumber.js';
 
-import { decodeMichelsonValue } from '@/tezos/codec';
+import { decodeMichelsonValue } from '@/tezos/encoders';
 import { Blockchain } from '@/tezos/provider';
 import { assert, isJson } from '@/tools/utils';
 
