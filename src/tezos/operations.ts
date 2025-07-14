@@ -6,7 +6,7 @@ import { blake2b } from '@noble/hashes/blake2';
 
 import { prepareBatch } from '@/tezos/taquito-mirror/prepare';
 import { estimateBatch } from '@/tezos/taquito-mirror/estimate';
-import { Blockchain } from '@/tezos/provider';
+import { BlockchainInstance } from '@/tezos/provider';
 
 export type Reveal = withKind<ParamsWithKindExtended, OpKind.REVEAL> & { source: string; public_key: string };
 export type Transaction = withKind<ParamsWithKindExtended, OpKind.TRANSACTION>;
@@ -14,6 +14,8 @@ export type Origination = withKind<ParamsWithKindExtended, OpKind.ORIGINATION>;
 export type Operation = Reveal | Transaction | Origination;
 
 export { checkRevealed } from '@/tezos/taquito-mirror/prepare';
+
+const Blockchain: BlockchainInstance = new BlockchainInstance();
 
 const FORGER: LocalForger = new LocalForger();
 
@@ -130,7 +132,7 @@ export async function simulateOperation(op: PreparedOperation, options?: RPCOpti
   return Blockchain.simulateOperation(
     {
       operation: { branch: op.opOb.branch, contents: op.opOb.contents },
-      chain_id: await Blockchain.chainId,
+      chain_id: await Blockchain.getChainId(),
     },
     options
   );

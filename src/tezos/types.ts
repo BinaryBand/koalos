@@ -1,6 +1,6 @@
 // https://tzip.tezosagora.org/
 
-import type { BigMap } from '@/tezos/storage';
+import type { BigMap } from '@/tezos/smart-contracts';
 
 export declare type Fa2TransferParams = {
   from_: string;

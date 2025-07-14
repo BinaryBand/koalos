@@ -1,64 +1,66 @@
 export * from '@/tezos/smart-contracts/quipuswap';
+export { TezosContract } from '@/tezos/provider';
 
-import { ContractResponse, EntrypointsResponse, RunViewResult } from '@taquito/rpc';
-import { ParameterSchema, Schema } from '@taquito/michelson-encoder';
+// import { BigMapResponse, EntrypointsResponse, RPCOptions, RunViewResult } from '@taquito/rpc';
+// import { ParameterSchema, Schema } from '@taquito/michelson-encoder';
 
-import { Blockchain } from '@/tezos/provider';
-import { TezosStorage } from '@/tezos/storage';
-import { assert } from '@/tools/utils';
+// import { BlockchainInstance } from '@/tezos/provider';
+// import { assert } from '@/tools/utils';
 
-type MichelsonView = MichelsonV1ExpressionExtended & {
-  prim: 'pair';
-  args: [MichelsonV1Expression, { prim: 'contract'; args: [MichelsonV1Expression] }];
-};
+// export class TezosContract {
+//   constructor(
+//     public readonly address: string,
+//     protected readonly context: BlockchainInstance = new BlockchainInstance()
+//   ) {}
 
-export class TezosContract {
-  constructor(public readonly address: string) {}
+//   private isView(view: MichelsonV1Expression): view is MichelsonView {
+//     if ('prim' in view && view.prim === 'pair' && view.args) {
+//       const lastElement: MichelsonV1Expression | undefined = view.args[view.args.length - 1];
+//       return lastElement !== undefined && 'prim' in lastElement && lastElement.prim === 'contract';
+//     }
 
-  public get storage(): Promise<TezosStorage | undefined> {
-    return Blockchain.getContractResponse(this.address).then((c?: ContractResponse) =>
-      c ? new TezosStorage(this.address, c.script) : undefined
-    );
-  }
+//     return false;
+//   }
 
-  private isView(view: MichelsonV1Expression): view is MichelsonView {
-    if ('prim' in view && view.prim === 'pair' && view.args) {
-      const lastElement: MichelsonV1Expression | undefined = view.args[view.args.length - 1];
-      return lastElement !== undefined && 'prim' in lastElement && lastElement.prim === 'contract';
-    }
+//   protected async createMethod<T>(args: T, entrypoint: string): Promise<TransactionOperationParameter> {
+//     const entrypoints: EntrypointsResponse | undefined = await this.context.getEntrypointsResponse(this.address);
+//     assert(entrypoints !== undefined, `Entrypoints not found for contract: ${this.address}`);
 
-    return false;
-  }
+//     const { [entrypoint]: method } = entrypoints.entrypoints;
+//     assert(method !== undefined, 'method not found or invalid.');
 
-  protected async createMethod<T>(args: T, entrypoint: string): Promise<TransactionOperationParameter> {
-    const entrypoints: EntrypointsResponse | undefined = await Blockchain.getEntrypointsResponse(this.address);
-    assert(entrypoints !== undefined, `Entrypoints not found for contract: ${this.address}`);
+//     const methodSchema: ParameterSchema = new ParameterSchema(method);
+//     new Schema(method).Typecheck(args);
 
-    const { [entrypoint]: method } = entrypoints.entrypoints;
-    assert(method !== undefined, 'method not found or invalid.');
+//     const transferParameter: MichelsonV1Expression = methodSchema.EncodeObject(args);
+//     assert(transferParameter !== undefined, 'Failed to create transfer parameters.');
 
-    const methodSchema: ParameterSchema = new ParameterSchema(method);
-    new Schema(method).Typecheck(args);
+//     return { entrypoint, value: transferParameter };
+//   }
 
-    const transferParameter: MichelsonV1Expression = methodSchema.EncodeObject(args);
-    assert(transferParameter !== undefined, 'Failed to create transfer parameters.');
+//   protected async executeView<T, U>(args: T, entrypoint: string): Promise<U> {
+//     const entrypoints: EntrypointsResponse | undefined = await this.context.getEntrypointsResponse(this.address);
+//     assert(entrypoints !== undefined, `Entrypoints not found for contract: ${this.address}`);
 
-    return { entrypoint, value: transferParameter };
-  }
+//     const { [entrypoint]: view } = entrypoints.entrypoints;
+//     assert(view !== undefined && this.isView(view), 'view not found or invalid.');
 
-  protected async executeView<T, U>(args: T, entrypoint: string): Promise<U> {
-    const entrypoints: EntrypointsResponse | undefined = await Blockchain.getEntrypointsResponse(this.address);
-    assert(entrypoints !== undefined, `Entrypoints not found for contract: ${this.address}`);
+//     const viewSchema: ParameterSchema = new ParameterSchema(view.args[0]);
+//     new Schema(view.args[0]).Typecheck(args);
 
-    const { [entrypoint]: view } = entrypoints.entrypoints;
-    assert(view !== undefined && this.isView(view), 'view not found or invalid.');
+//     const result: RunViewResult = await this.context.runView(this.address, entrypoint, viewSchema.Encode(args));
 
-    const viewSchema: ParameterSchema = new ParameterSchema(view.args[0]);
-    new Schema(view.args[0]).Typecheck(args);
+//     const callbackSchema: ParameterSchema = new ParameterSchema(view.args[1].args[0]);
+//     return callbackSchema.Execute(result.data);
+//   }
 
-    const result: RunViewResult = await Blockchain.runView(this.address, entrypoint, viewSchema.Encode(args));
+//   public getScriptResponse(opts?: RPCOptions): Promise<ScriptResponse | undefined> {
+//     return this.context.getScriptResponse(this.address, opts);
+//   }
 
-    const callbackSchema: ParameterSchema = new ParameterSchema(view.args[1].args[0]);
-    return callbackSchema.Execute(result.data);
-  }
-}
+//   public getBigMapValue(id: string, key: Primitive): Promise<BigMapResponse | undefined> {
+//     return this.context.getBigMapValue(id, key);
+//   }
+// }
+
+export { BigMap, TezosStorage } from './storage';

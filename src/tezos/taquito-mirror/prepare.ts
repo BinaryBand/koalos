@@ -25,8 +25,10 @@ import { Expr, GlobalConstantHashAndValue, Parser, Prim } from '@taquito/michel-
 import { Schema, Token } from '@taquito/michelson-encoder';
 import { BigNumber } from 'bignumber.js';
 
-import { Blockchain } from '@/tezos/provider';
+import { BlockchainInstance } from '@/tezos/provider';
 import { assert } from '@/tools/utils';
+
+const blockchainInstance: BlockchainInstance = new BlockchainInstance();
 
 type Limits = {
   fee?: number;
@@ -180,7 +182,7 @@ async function applyLimits(batchParams: ParamsWithKindExtended[]): Promise<RPCOp
   let defaultLimits: Required<Limits> = undefined!;
   if (batchParams.some(isOpWithFee)) {
     const { hard_gas_limit_per_block, hard_gas_limit_per_operation, hard_storage_limit_per_operation } =
-      await Blockchain.constants;
+      await blockchainInstance.getConstants();
 
     const gasLimit: BigNumber = BigNumber.min(
       hard_gas_limit_per_operation,
@@ -220,8 +222,8 @@ export function extractAddressFromParams(batchParams: ParamsWithKindExtended[]):
 }
 
 export async function checkRevealed(address: string): Promise<boolean> {
-  const manager: ManagerKeyResponse | undefined = await Blockchain.getManagerKey(address);
-  return manager !== undefined && Boolean(typeof manager === 'object' ? manager.key : manager);
+  const manager: ManagerKeyResponse | undefined = await blockchainInstance.getManagerKey(address);
+  return Boolean(manager) && Boolean(typeof manager === 'object' ? manager.key : manager);
 }
 
 export async function needsReveal(batchParams: ParamsWithKindExtended[], address?: string): Promise<boolean> {
@@ -245,9 +247,9 @@ export async function prepareBatch(
   assert(!(await needsReveal(batchParams, address)), 'Reveal operation is needed but not provided in the batch');
 
   const [branch, { protocol }, contract] = await Promise.all([
-    Blockchain.getBlockHash({ block: 'head~2' }),
-    Blockchain.getProtocols(),
-    Blockchain.getContractResponse(address),
+    blockchainInstance.getBlockHash({ block: 'head~2' }),
+    blockchainInstance.getProtocols(),
+    blockchainInstance.getContractResponse(address),
   ]);
 
   const headCounter: number = parseInt(contract?.counter ?? '0', 10);

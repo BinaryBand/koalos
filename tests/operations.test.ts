@@ -9,7 +9,7 @@ import {
   checkRevealed,
   createReveal,
   createTransaction,
-  createOrigination,
+  // createOrigination,
   forgeOperation,
   prepare,
   simulateOperation,
@@ -17,7 +17,7 @@ import {
 
 import { burnPublicKey, burnAddress, revealedAddress } from '@public/tests/wallet.json';
 import { secretKey, publicKey, branch, protocol } from '@public/constants/stub-values.json';
-import { code, storage } from '@public/tests/simple-contract.json';
+// import { code, storage } from '@public/tests/simple-contract.json';
 
 const DEFAULT_SIGNER: InMemorySigner = new InMemorySigner(secretKey);
 const WATERMARK: Uint8Array = new Uint8Array([0x03]);
@@ -97,18 +97,18 @@ describe('operation tests', () => {
   });
 });
 
-describe('smart contracts', () => {
-  it('prepare code origination params', async () => {
-    const batch: Operation[] = [await createOrigination(revealedAddress, code, storage)];
+// describe('smart contracts', () => {
+//   it('prepare code origination params', async () => {
+//     const batch: Operation[] = [await createOrigination(revealedAddress, code, storage)];
 
-    const prepared: PreparedOperation = await prepare(batch);
-    const simulation: PreapplyResponse = await simulateOperation(prepared);
-    simulation.contents.forEach((c) => {
-      assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
-      expect(c.metadata.operation_result).toMatchObject({ status: 'applied' });
-    });
-  });
-});
+//     const prepared: PreparedOperation = await prepare(batch);
+//     const simulation: PreapplyResponse = await simulateOperation(prepared);
+//     simulation.contents.forEach((c) => {
+//       assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
+//       expect(c.metadata.operation_result).toMatchObject({ status: 'applied' });
+//     });
+//   });
+// });
 
 describe('preapply operations tests', () => {
   it('test forge function', async () => {

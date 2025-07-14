@@ -3,7 +3,9 @@ import { OperationContentsAndResult, PreapplyResponse, RPCSimulateOperationParam
 import { ForgeParams, LocalForger } from '@taquito/local-forging';
 import { MergedOperationResult } from '@taquito/taquito/dist/types/operations/errors';
 
-import { Blockchain } from '@/tezos/provider';
+import { BlockchainInstance } from '@/tezos/provider';
+
+const blockchainInstance: BlockchainInstance = new BlockchainInstance();
 
 type Content = PreapplyResponse['contents'][0];
 
@@ -64,13 +66,13 @@ async function calculateEstimates(op: PreparedOperation) {
   const params: ForgeParams = { branch: op.opOb.branch, contents: op.opOb.contents };
   const forged: string = await new LocalForger().forge(params);
 
-  const operation: RPCSimulateOperationParam = { operation: params, chain_id: await Blockchain.chainId };
-  const results: PreapplyResponse = await Blockchain.simulateOperation(operation);
+  const operation: RPCSimulateOperationParam = { operation: params, chain_id: await blockchainInstance.getChainId() };
+  const results: PreapplyResponse = await blockchainInstance.simulateOperation(operation);
 
   const nonRevealOps: OperationContentsAndResult[] = results.contents.filter(({ kind }) => kind !== 'reveal');
   const numberOfOps: number = nonRevealOps.length;
 
-  const { cost_per_byte, origination_size = 257 } = await Blockchain.constants;
+  const { cost_per_byte, origination_size = 257 } = await blockchainInstance.getConstants();
   return results.contents.map((contents: OperationContentsAndResult) => {
     // Difference between estimated and final OP_SIZE is 124-126, we added buffer to use 130
     let size = (forged.length + 130) / (2 * numberOfOps);

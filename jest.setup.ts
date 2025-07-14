@@ -1,6 +1,6 @@
 import {
-  ContractResponse,
-  BigMapResponse,
+  // ContractResponse,
+  // BigMapResponse,
   RpcClient,
   RPCOptions,
   RPCRunViewParam,
@@ -13,10 +13,10 @@ import path from 'path';
 import qs from 'qs';
 
 import CONSTANTS from '@public/tests/constants.json';
-import CONST_META from '@public/tests/constants.meta.json';
-import PROTOCOLS from '@public/tests/protocols.json';
-import RPC_URLS from '@public/constants/rpc-providers.json';
-import { burnAddress } from '@public/tests/wallet.json';
+// import CONST_META from '@public/tests/constants.meta.json';
+// import PROTOCOLS from '@public/tests/protocols.json';
+// import RPC_URLS from '@public/constants/rpc-providers.json';
+// import { burnAddress } from '@public/tests/wallet.json';
 
 import { fetchAndCache } from '@/tools/cache';
 
@@ -80,56 +80,56 @@ jest.mock('@taquito/rpc', () => {
   const mockRpcClient = jest.fn().mockImplementation((url: string, chain?: string, httpBackend?: HttpBackend) => {
     const instance: RpcClient = new actualRpc.RpcClient(url, chain, httpBackend);
 
-    instance.getChainId = jest.fn().mockReturnValue('NetXdQprcVkpaWU');
-    instance.getConstants = jest.fn().mockReturnValue({ ...CONSTANTS, ...castToBigNumber(CONSTANTS, CONST_META) });
-    instance.getProtocols = jest.fn().mockReturnValue(PROTOCOLS);
-    instance.getRpcUrl = jest.fn().mockImplementation(() => RPC_URLS[Math.floor(Math.random() * RPC_URLS.length)]);
+    // instance.getChainId = jest.fn().mockReturnValue('NetXdQprcVkpaWU');
+    // instance.getConstants = jest.fn().mockReturnValue({ ...CONSTANTS, ...castToBigNumber(CONSTANTS, CONST_META) });
+    // instance.getProtocols = jest.fn().mockReturnValue(PROTOCOLS);
+    // instance.getRpcUrl = jest.fn().mockImplementation(() => RPC_URLS[Math.floor(Math.random() * RPC_URLS.length)]);
 
-    instance.getBlockHeader = jest.fn().mockImplementation(async (opts?: RPCOptions) => {
-      const key: string = quickHash('blockHeader', opts?.block ?? 'head');
-      const callback = actualRpc.RpcClient.prototype.getBlockHeader.bind(instance, opts);
-      const expiry: Date = new Date(Date.now() + BLOCK_DELAY);
-      return fetchAndCache(key, callback, CACHE_DIRECTORY, expiry);
-    });
+    // instance.getBlockHeader = jest.fn().mockImplementation(async (opts?: RPCOptions) => {
+    //   const key: string = quickHash('blockHeader', opts?.block ?? 'head');
+    //   const callback = actualRpc.RpcClient.prototype.getBlockHeader.bind(instance, opts);
+    //   const expiry: Date = new Date(Date.now() + BLOCK_DELAY);
+    //   return fetchAndCache(key, callback, CACHE_DIRECTORY, expiry);
+    // });
 
-    instance.getBlockHash = jest.fn().mockImplementation(async (opts?: RPCOptions) => {
-      return (await instance.getBlockHeader(opts)).hash;
-    });
+    // instance.getBlockHash = jest.fn().mockImplementation(async (opts?: RPCOptions) => {
+    //   return (await instance.getBlockHeader(opts)).hash;
+    // });
 
-    instance.getManagerKey = jest.fn().mockImplementation(async (address: string, opts?: RPCOptions) => {
-      const key: string = quickHash('managerKey', address, opts?.block ?? 'head');
-      const callback = actualRpc.RpcClient.prototype.getManagerKey.bind(instance, address, opts);
-      return fetchAndCache(key, callback, CACHE_DIRECTORY);
-    });
+    // instance.getManagerKey = jest.fn().mockImplementation(async (address: string, opts?: RPCOptions) => {
+    //   const key: string = quickHash('managerKey', address, opts?.block ?? 'head');
+    //   const callback = actualRpc.RpcClient.prototype.getManagerKey.bind(instance, address, opts);
+    //   return fetchAndCache(key, callback, CACHE_DIRECTORY);
+    // });
 
-    instance.getContract = jest.fn().mockImplementation(async (address: string, opts?: RPCOptions) => {
-      const key: string = quickHash('contract', address, opts?.block ?? 'head');
-      const callback = actualRpc.RpcClient.prototype.getContract.bind(instance, address, opts);
-      const expiryOffset: number = address.startsWith('KT') || address === burnAddress ? BLOCKS_PER_CYCLE : 1;
-      const expiry: Date = new Date(Date.now() + BLOCK_DELAY * expiryOffset);
-      return fetchAndCache<ContractResponse>(key, callback, CACHE_DIRECTORY, expiry);
-    });
+    // instance.getContract = jest.fn().mockImplementation(async (address: string, opts?: RPCOptions) => {
+    //   const key: string = quickHash('contract', address, opts?.block ?? 'head');
+    //   const callback = actualRpc.RpcClient.prototype.getContract.bind(instance, address, opts);
+    //   const expiryOffset: number = address.startsWith('KT') || address === burnAddress ? BLOCKS_PER_CYCLE : 1;
+    //   const expiry: Date = new Date(Date.now() + BLOCK_DELAY * expiryOffset);
+    //   return fetchAndCache<ContractResponse>(key, callback, CACHE_DIRECTORY, expiry);
+    // });
 
-    instance.getScript = jest.fn().mockImplementation(async (address: string, opts?: RPCOptions) => {
-      const key: string = quickHash('script', address, opts?.block ?? 'head');
-      const callback = actualRpc.RpcClient.prototype.getScript.bind(instance, address, opts);
-      const expiry: Date = new Date(Date.now() + BLOCK_DELAY * BLOCKS_PER_CYCLE);
-      return fetchAndCache<ScriptResponse>(key, callback, CACHE_DIRECTORY, expiry);
-    });
+    // instance.getScript = jest.fn().mockImplementation(async (address: string, opts?: RPCOptions) => {
+    //   const key: string = quickHash('script', address, opts?.block ?? 'head');
+    //   const callback = actualRpc.RpcClient.prototype.getScript.bind(instance, address, opts);
+    //   const expiry: Date = new Date(Date.now() + BLOCK_DELAY * BLOCKS_PER_CYCLE);
+    //   return fetchAndCache<ScriptResponse>(key, callback, CACHE_DIRECTORY, expiry);
+    // });
 
-    instance.getEntrypoints = jest.fn().mockImplementation(async (address: string, opts?: RPCOptions) => {
-      const key: string = quickHash('entrypoints', address, opts?.block ?? 'head');
-      const callback = actualRpc.RpcClient.prototype.getEntrypoints.bind(instance, address, opts);
-      const expiry: Date = new Date(Date.now() + BLOCK_DELAY * BLOCKS_PER_CYCLE);
-      return fetchAndCache<Record<string, string>>(key, callback, CACHE_DIRECTORY, expiry);
-    });
+    // instance.getEntrypoints = jest.fn().mockImplementation(async (address: string, opts?: RPCOptions) => {
+    //   const key: string = quickHash('entrypoints', address, opts?.block ?? 'head');
+    //   const callback = actualRpc.RpcClient.prototype.getEntrypoints.bind(instance, address, opts);
+    //   const expiry: Date = new Date(Date.now() + BLOCK_DELAY * BLOCKS_PER_CYCLE);
+    //   return fetchAndCache<Record<string, string>>(key, callback, CACHE_DIRECTORY, expiry);
+    // });
 
-    instance.getBigMapExpr = jest.fn().mockImplementation(async (id: string, expr: string, opts?: RPCOptions) => {
-      const key: string = quickHash('bigMap', id, expr, opts?.block ?? 'head');
-      const callback = actualRpc.RpcClient.prototype.getBigMapExpr.bind(instance, id, expr, opts);
-      const expiry: Date = new Date(Date.now() + BLOCK_DELAY * BLOCKS_PER_CYCLE);
-      return fetchAndCache<BigMapResponse>(key, callback, CACHE_DIRECTORY, expiry);
-    });
+    // instance.getBigMapExpr = jest.fn().mockImplementation(async (id: string, expr: string, opts?: RPCOptions) => {
+    //   const key: string = quickHash('bigMap', id, expr, opts?.block ?? 'head');
+    //   const callback = actualRpc.RpcClient.prototype.getBigMapExpr.bind(instance, id, expr, opts);
+    //   const expiry: Date = new Date(Date.now() + BLOCK_DELAY * BLOCKS_PER_CYCLE);
+    //   return fetchAndCache<BigMapResponse>(key, callback, CACHE_DIRECTORY, expiry);
+    // });
 
     instance.simulateOperation = jest
       .fn()
