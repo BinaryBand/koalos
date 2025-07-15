@@ -1,11 +1,9 @@
 import { Estimate, EstimateProperties, hasMetadataWithResult, isOpWithFee, isOpWithGasBuffer } from '@taquito/taquito';
-import { OperationContentsAndResult, PreapplyResponse, RPCSimulateOperationParam } from '@taquito/rpc';
+import { OperationContentsAndResult, RPCSimulateOperationParam } from '@taquito/rpc';
 import { ForgeParams, LocalForger } from '@taquito/local-forging';
 import { MergedOperationResult } from '@taquito/taquito/dist/types/operations/errors';
 
-import { BlockchainInstance } from '@/tezos/provider';
-
-type Content = PreapplyResponse['contents'][0];
+import RpcProvider from '@/tezos/provider';
 
 const OP_SIZE_REVEAL: number = 324; // injecting size tz1=320, tz2=322, tz3=322, tz4=420(not supported)
 const MILLIGAS_BUFFER: number = 100000;
@@ -27,7 +25,12 @@ function flattenOperationResult(results: PreapplyResponse[]): MergedOperationRes
   return returnedResults;
 }
 
-function getEstimationContent(content: Content, opSize: number, byteCost: number, orSize: number): EstimateProperties {
+function getEstimationContent(
+  content: OperationContentsAndResult,
+  opSize: number,
+  byteCost: number,
+  orSize: number
+): EstimateProperties {
   const estimate: EstimateProperties = {
     milligasLimit: 0,
     storageLimit: 0,
@@ -60,20 +63,28 @@ function getEstimationContent(content: Content, opSize: number, byteCost: number
   return estimate;
 }
 
-async function calculateEstimates(op: PreparedOperation) {
-  const blockchainInstance: BlockchainInstance = new BlockchainInstance();
+export type InfoForEstimate = {
+  constants: ConstantsResponse;
+  chainId: string;
+};
 
+export async function estimateBatch(op: PreparedOperation, info: Partial<InfoForEstimate> = {}): Promise<Estimate[]> {
   const params: ForgeParams = { branch: op.opOb.branch, contents: op.opOb.contents };
   const forged: string = await new LocalForger().forge(params);
 
-  const operation: RPCSimulateOperationParam = { operation: params, chain_id: await blockchainInstance.getChainId() };
-  const results: PreapplyResponse = await blockchainInstance.simulateOperation(operation);
+  const [constants, chain_id] = await Promise.all([
+    info.constants ?? RpcProvider.singleton.getConstants(),
+    info.chainId ?? RpcProvider.singleton.getChainId(),
+  ]);
+
+  const operation: RPCSimulateOperationParam = { operation: params, chain_id };
+  const results: PreapplyResponse = await RpcProvider.singleton.simulateOperation(operation);
 
   const nonRevealOps: OperationContentsAndResult[] = results.contents.filter(({ kind }) => kind !== 'reveal');
   const numberOfOps: number = nonRevealOps.length;
 
-  const { cost_per_byte, origination_size = 257 } = await blockchainInstance.getConstants();
-  return results.contents.map((contents: OperationContentsAndResult) => {
+  const { cost_per_byte, origination_size = 257 } = constants;
+  const estimateProperties: EstimateProperties[] = results.contents.map((contents: OperationContentsAndResult) => {
     // Difference between estimated and final OP_SIZE is 124-126, we added buffer to use 130
     let size = (forged.length + 130) / (2 * numberOfOps);
     if (contents.kind === 'reveal') {
@@ -82,9 +93,6 @@ async function calculateEstimates(op: PreparedOperation) {
 
     return getEstimationContent(contents, size, cost_per_byte.toNumber(), origination_size);
   });
-}
 
-export async function estimateBatch(preparedOperation: PreparedOperation): Promise<Estimate[]> {
-  const estimateProperties: EstimateProperties[] = await calculateEstimates(preparedOperation);
   return Estimate.createArrayEstimateInstancesFromProperties(estimateProperties);
 }

@@ -25,7 +25,7 @@ import { Expr, GlobalConstantHashAndValue, Parser, Prim } from '@taquito/michel-
 import { Schema, Token } from '@taquito/michelson-encoder';
 import { BigNumber } from 'bignumber.js';
 
-import { BlockchainInstance } from '@/tezos/provider';
+import RpcProvider from '@/tezos/provider';
 import { assert } from '@/tools/utils';
 
 type Limits = {
@@ -176,14 +176,13 @@ function constructOpContents(ops: RPCOperation[], headCounter: number, source: s
   });
 }
 
-async function applyLimits(batchParams: ParamsWithKindExtended[]): Promise<RPCOperation[]> {
-  const blockchainInstance: BlockchainInstance = new BlockchainInstance();
-
+async function applyLimits(
+  batchParams: ParamsWithKindExtended[],
+  constants: ConstantsResponse
+): Promise<RPCOperation[]> {
   let defaultLimits: Required<Limits> = undefined!;
   if (batchParams.some(isOpWithFee)) {
-    const { hard_gas_limit_per_block, hard_gas_limit_per_operation, hard_storage_limit_per_operation } =
-      await blockchainInstance.getConstants();
-
+    const { hard_gas_limit_per_block, hard_gas_limit_per_operation, hard_storage_limit_per_operation } = constants;
     const gasLimit: BigNumber = BigNumber.min(
       hard_gas_limit_per_operation,
       hard_gas_limit_per_block.div(batchParams.length + 1)
@@ -221,10 +220,12 @@ export function extractAddressFromParams(batchParams: ParamsWithKindExtended[]):
   return candidates.pkh || candidates.source || candidates.delegate;
 }
 
-export async function checkRevealed(address: string): Promise<boolean> {
-  const blockchainInstance: BlockchainInstance = new BlockchainInstance();
+export type InfoForReveal = {
+  manager: ManagerKeyResponse;
+};
 
-  const manager: ManagerKeyResponse | undefined = await blockchainInstance.getManagerKey(address);
+export async function checkRevealed(address: string, info: Partial<InfoForReveal> = {}): Promise<boolean> {
+  const manager: ManagerKeyResponse | undefined = info.manager ?? (await RpcProvider.singleton.getManagerKey(address));
   return Boolean(manager) && Boolean(typeof manager === 'object' ? manager.key : manager);
 }
 
@@ -239,25 +240,29 @@ export async function needsReveal(batchParams: ParamsWithKindExtended[], address
   return !(await checkRevealed(address));
 }
 
+export type InfoForPrepare = {
+  constants: ConstantsResponse;
+  branch: string;
+  protocol: string;
+  counter: number;
+};
+
 export async function prepareBatch(
+  address: string,
   batchParams: ParamsWithKindExtended[],
-  address?: string
+  info: Partial<InfoForPrepare> = {}
 ): Promise<PreparedOperation> {
-  const blockchainInstance: BlockchainInstance = new BlockchainInstance();
-
-  address ??= extractAddressFromParams(batchParams)!;
-
-  const operations: RPCOperation[] = await applyLimits(batchParams);
-  assert(!(await needsReveal(batchParams, address)), 'Reveal operation is needed but not provided in the batch');
-
-  const [branch, { protocol }, contract] = await Promise.all([
-    blockchainInstance.getBlockHash({ block: 'head~2' }),
-    blockchainInstance.getProtocols(),
-    blockchainInstance.getContractResponse(address),
+  const [constants, branch, protocol, counter] = await Promise.all([
+    info.constants ?? RpcProvider.singleton.getConstants(),
+    info.branch ?? RpcProvider.singleton.getBlockHash({ block: 'head~2' }),
+    info.protocol ?? RpcProvider.singleton.getProtocols().then(({ protocol }) => protocol),
+    info.counter ??
+      RpcProvider.singleton.getContractResponse(address).then((contract) => parseInt(contract?.counter ?? '0', 10)),
   ]);
 
-  const headCounter: number = parseInt(contract?.counter ?? '0', 10);
-  const contents: OperationContents[] = constructOpContents(operations, headCounter, address);
+  const operations: RPCOperation[] = await applyLimits(batchParams, constants);
+  assert(!(await needsReveal(batchParams, address)), 'Reveal operation is needed but not provided in the batch');
 
-  return { opOb: { branch, contents, protocol }, counter: headCounter };
+  const contents: OperationContents[] = constructOpContents(operations, counter, address);
+  return { opOb: { branch, contents, protocol }, counter };
 }

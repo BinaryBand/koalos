@@ -1,11 +1,10 @@
-import { assert, isJson } from '@/tools/utils';
-import { tezosStorageUri } from '@public/constants/regex.json';
-import { ContractResponse } from '@taquito/rpc';
-import { BigMap, TezosStorage } from './storage';
-
-import { BlockchainInstance } from '@/tezos/provider';
-import { TezosContract } from '.';
 import { MichelsonMap } from '@taquito/taquito';
+import { assert, isJson } from '@/tools/utils';
+
+import { BigMap, TezosStorage } from '@/tezos/contracts/storage';
+import RpcProvider from '@/tezos/provider';
+
+import { tezosStorageUri } from '@public/constants/regex.json';
 
 const TEZOS_STORAGE_REGEX: RegExp = new RegExp(tezosStorageUri);
 
@@ -29,17 +28,15 @@ export function normalizeTezosUri(uri: string, defaultAddress?: string): string 
   return normalizedUri;
 }
 
-export async function getMetadataStorage<T>(uri: string, context: TezosContract): Promise<T | undefined> {
+export async function getMetadataStorage<T>(uri: string): Promise<T | undefined> {
   const match: RegExpExecArray | null = TEZOS_STORAGE_REGEX.exec(uri);
   assert(match, `Invalid Tezos storage URI: ${uri}`);
 
   const [, address, path] = match;
   assert(address !== undefined, `No contract address found in URI or default: ${uri}`);
 
-  const blockchainInstance: BlockchainInstance = new BlockchainInstance();
-
-  const schema: ContractResponse | undefined = await blockchainInstance.getContractResponse(address);
-  const storage: TezosStorage | undefined = new TezosStorage(schema!.script, context);
+  const schema: ContractResponse | undefined = await RpcProvider.singleton.getContractResponse(address);
+  const storage: TezosStorage | undefined = new TezosStorage(schema!.script);
   const bigMap: BigMap | undefined = storage?.get<BigMap>('metadata');
 
   let curr: unknown = bigMap;

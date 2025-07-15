@@ -1,9 +1,11 @@
 import { Estimate, hasMetadataWithResult, ParamsWithKind, Signer, TezosToolkit } from '@taquito/taquito';
 import { PreapplyResponse } from '@taquito/rpc';
 
-import { createReveal, createTransaction, prepare, simulateOperation } from '@/index';
+import { createReveal, createTransaction, simulateOperation } from '@/index';
 import { estimateBatch } from '@/tezos/taquito-mirror/estimate';
 import { prepareBatch } from '@/tezos/taquito-mirror/prepare';
+import { BlockchainInstance } from '@/tezos/blockchain';
+import RpcProvider from '@/tezos/provider';
 import { assert } from '@/tools/utils';
 
 import { burnPublicKey, burnAddress, revealedAddress } from '@public/tests/wallet.json';
@@ -22,6 +24,7 @@ const BURN_ADDRESS_SIGNER: Signer = {
   publicKeyHash: jest.fn().mockReturnValue(burnAddress),
 };
 
+const blockchainInstance: BlockchainInstance = BlockchainInstance.createInstance();
 const toolkit: TezosToolkit = new TezosToolkit(RPC_URLS[Math.floor(Math.random() * RPC_URLS.length)]!);
 
 describe('preparation tests', () => {
@@ -30,7 +33,7 @@ describe('preparation tests', () => {
 
     const batch: Transaction[] = [createTransaction(revealedAddress, burnAddress, 0.001)];
 
-    const test: PreparedOperation = await prepareBatch(batch);
+    const test: PreparedOperation = await prepareBatch(revealedAddress, batch);
     const control: PreparedOperation = await toolkit.prepare.batch(batch);
     expect(test.opOb.contents).toEqual(control.opOb.contents);
   });
@@ -43,7 +46,7 @@ describe('preparation tests', () => {
       createTransaction(revealedAddress, burnAddress, 0.001),
     ];
 
-    const test: PreparedOperation = await prepareBatch(batch);
+    const test: PreparedOperation = await prepareBatch(revealedAddress, batch);
     const control: PreparedOperation = await toolkit.prepare.batch(batch);
     expect(test.opOb.contents).toEqual(control.opOb.contents);
   });
@@ -59,7 +62,7 @@ describe('preparation tests', () => {
       createTransaction(burnAddress, revealedAddress, 0.00075),
     ];
 
-    const prepared: PreparedOperation = await prepare(batch);
+    const prepared: PreparedOperation = await blockchainInstance.prepare(batch);
     const simulation: PreapplyResponse = await simulateOperation(prepared);
     simulation.contents.forEach((c) => {
       assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
@@ -79,8 +82,9 @@ describe('batch estimate tests', () => {
       createTransaction(revealedAddress, burnAddress, 0.00075),
     ];
 
-    const preparedOperation: PreparedOperation = await prepareBatch(batch);
-    const test: Estimate[] = await estimateBatch(preparedOperation);
+    const constants: ConstantsResponse = await RpcProvider.singleton.getConstants();
+    const preparedOperation: PreparedOperation = await prepareBatch(revealedAddress, batch, { constants });
+    const test: Estimate[] = await estimateBatch(preparedOperation, { constants });
     const control: Estimate[] = await toolkit.estimate.batch(batch as ParamsWithKind[]);
     expect(test).toEqual(control);
   });
@@ -94,7 +98,7 @@ describe('batch estimate tests', () => {
       createTransaction(burnAddress, revealedAddress, 0.001),
     ];
 
-    const prepared: PreparedOperation = await prepare(batch);
+    const prepared: PreparedOperation = await blockchainInstance.prepare(batch);
     const simulation: PreapplyResponse = await simulateOperation(prepared);
     simulation.contents.forEach((c) => {
       assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
@@ -111,7 +115,7 @@ describe('batch estimate tests', () => {
     ];
 
     try {
-      await prepare(batch);
+      await blockchainInstance.prepare(batch);
     } catch (error: unknown) {
       assert(error instanceof Error, 'Expected an error to be thrown');
       expect(typeof error.message).toBe('string');

@@ -10,15 +10,15 @@ import {
   createReveal,
   createTransaction,
   // createOrigination,
-  forgeOperation,
-  prepare,
   simulateOperation,
 } from '@/index';
+import { BlockchainInstance } from '@/tezos/blockchain';
 
 import { burnPublicKey, burnAddress, revealedAddress } from '@public/tests/wallet.json';
 import { secretKey, publicKey, branch, protocol } from '@public/constants/stub-values.json';
 // import { code, storage } from '@public/tests/simple-contract.json';
 
+const blockchainInstance: BlockchainInstance = BlockchainInstance.createInstance();
 const DEFAULT_SIGNER: InMemorySigner = new InMemorySigner(secretKey);
 const WATERMARK: Uint8Array = new Uint8Array([0x03]);
 
@@ -45,7 +45,7 @@ describe('operation tests', () => {
   it('verify simple operation', async () => {
     const batch: Operation[] = [createTransaction(revealedAddress, burnAddress, 0.0001)];
 
-    const prepared: PreparedOperation = await prepare(batch);
+    const prepared: PreparedOperation = await blockchainInstance.prepare(batch);
     const simulation: PreapplyResponse = await simulateOperation(prepared);
     simulation.contents.forEach((c) => {
       assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
@@ -59,7 +59,7 @@ describe('operation tests', () => {
       createTransaction(revealedAddress, burnAddress, 0.001),
     ];
 
-    const prepared: PreparedOperation = await prepare(batch);
+    const prepared: PreparedOperation = await blockchainInstance.prepare(batch);
     const simulation: PreapplyResponse = await simulateOperation(prepared);
     simulation.contents.forEach((c) => {
       assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
@@ -74,7 +74,7 @@ describe('operation tests', () => {
       createTransaction(burnAddress, revealedAddress, 0.001),
     ];
 
-    const prepared: PreparedOperation = await prepare(batch);
+    const prepared: PreparedOperation = await blockchainInstance.prepare(batch);
     const simulation: PreapplyResponse = await simulateOperation(prepared);
     simulation.contents.forEach((c) => {
       assert(hasMetadataWithResult(c), 'Expected metadata with operation result to be present');
@@ -89,7 +89,7 @@ describe('operation tests', () => {
     ];
 
     try {
-      await prepare(batch);
+      await blockchainInstance.prepare(batch);
     } catch (error: unknown) {
       assert(error instanceof Error, 'Expected an error to be thrown');
       expect(typeof error.message).toBe('string');
@@ -132,7 +132,7 @@ describe('preapply operations tests', () => {
       counter: 8190584,
     };
 
-    const [payload, signHere] = await forgeOperation(operation);
+    const [payload, signHere] = await BlockchainInstance.forgeOperation(operation);
     expect(payload).toBe(
       '27a9c46a954c4cdeb5f4a5750bfd9763689a678285a35a7047a09eebc2ac5fa46c00253421ab745fe0736f6ac43c018527ee2beb701700f9f4f3030000010000d3dfd34be90506a14f39794a455a6b1abf1d302f00'
     );
