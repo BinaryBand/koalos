@@ -15,8 +15,6 @@ export type Operation = Reveal | Transaction | Origination;
 
 export { checkRevealed } from '@/tezos/taquito-mirror/prepare';
 
-const Blockchain: BlockchainInstance = new BlockchainInstance();
-
 const FORGER: LocalForger = new LocalForger();
 
 /**
@@ -129,10 +127,11 @@ export async function forgeOperation({ opOb }: PreparedOperation): Promise<[stri
  * @returns A promise that resolves to the preapply response of the simulated operation.
  */
 export async function simulateOperation(op: PreparedOperation, options?: RPCOptions): Promise<PreapplyResponse> {
-  return Blockchain.simulateOperation(
+  const blockchainInstance: BlockchainInstance = new BlockchainInstance();
+  return blockchainInstance.simulateOperation(
     {
       operation: { branch: op.opOb.branch, contents: op.opOb.contents },
-      chain_id: await Blockchain.getChainId(),
+      chain_id: await blockchainInstance.getChainId(),
     },
     options
   );
@@ -147,6 +146,7 @@ export async function simulateOperation(op: PreparedOperation, options?: RPCOpti
  * @returns A promise that resolves to the operation hash (`OperationHash`) of the injected operation.
  */
 export async function sendForgedOperation(forgedHex: string, signatureHex: string): Promise<string> {
+  const blockchainInstance: BlockchainInstance = new BlockchainInstance();
   const signedOperation: string = forgedHex + signatureHex;
-  return Blockchain.injectOperation(signedOperation);
+  return blockchainInstance.injectOperation(signedOperation);
 }

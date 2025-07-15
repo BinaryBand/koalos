@@ -28,8 +28,6 @@ import { BigNumber } from 'bignumber.js';
 import { BlockchainInstance } from '@/tezos/provider';
 import { assert } from '@/tools/utils';
 
-const blockchainInstance: BlockchainInstance = new BlockchainInstance();
-
 type Limits = {
   fee?: number;
   storageLimit?: number;
@@ -179,6 +177,8 @@ function constructOpContents(ops: RPCOperation[], headCounter: number, source: s
 }
 
 async function applyLimits(batchParams: ParamsWithKindExtended[]): Promise<RPCOperation[]> {
+  const blockchainInstance: BlockchainInstance = new BlockchainInstance();
+
   let defaultLimits: Required<Limits> = undefined!;
   if (batchParams.some(isOpWithFee)) {
     const { hard_gas_limit_per_block, hard_gas_limit_per_operation, hard_storage_limit_per_operation } =
@@ -222,6 +222,8 @@ export function extractAddressFromParams(batchParams: ParamsWithKindExtended[]):
 }
 
 export async function checkRevealed(address: string): Promise<boolean> {
+  const blockchainInstance: BlockchainInstance = new BlockchainInstance();
+
   const manager: ManagerKeyResponse | undefined = await blockchainInstance.getManagerKey(address);
   return Boolean(manager) && Boolean(typeof manager === 'object' ? manager.key : manager);
 }
@@ -241,6 +243,8 @@ export async function prepareBatch(
   batchParams: ParamsWithKindExtended[],
   address?: string
 ): Promise<PreparedOperation> {
+  const blockchainInstance: BlockchainInstance = new BlockchainInstance();
+
   address ??= extractAddressFromParams(batchParams)!;
 
   const operations: RPCOperation[] = await applyLimits(batchParams);

@@ -13,13 +13,14 @@ import {
 } from '@taquito/rpc';
 import { ContractResponse, EntrypointsResponse, RunViewResult, StorageResponse } from '@taquito/rpc';
 import { MichelsonMap, ParameterSchema, Schema, Token, UnitValue } from '@taquito/michelson-encoder';
+import { BigNumber } from 'bignumber.js';
 
 import RPC_URLS from '@public/constants/rpc-providers.json';
 import { decodeMichelsonValue, toExpr, unwrapMichelsonMap } from '@/tezos/encoders';
 import { assert, isJson } from '@/tools/utils';
 import { Fa2Balance, Fa2BalanceRequest, OperatorUpdate, TZip17Metadata, TZip21TokenMetadata } from './types';
 import { getFromIpfs, isIpfsLink } from '@/tools/ipfs';
-import { getMetadataStorage, isTezosLink, normalizeTezosUri } from './smart-contracts/metadata';
+import { getMetadataStorage, isTezosLink, normalizeTezosUri } from './contracts/metadata';
 
 type MichelsonView = MichelsonV1ExpressionExtended & {
   prim: 'pair';
@@ -62,8 +63,6 @@ function handlePotentialOperationError(result: any, message: string, meta: Opera
 }
 
 class RpcProvider {
-  constructor() {}
-
   public getChainId(): Promise<string> {
     return Tezos().rpc.getChainId();
   }
@@ -153,10 +152,6 @@ function isFa2(entrypointsResponse: EntrypointsResponse): boolean {
 }
 
 export class BlockchainInstance extends RpcProvider {
-  constructor() {
-    super();
-  }
-
   public async getContract(address: string): Promise<TezosContract | undefined> {
     const contractResponse = await this.getContractResponse(address);
     return contractResponse ? new TezosContract(address, contractResponse, this) : undefined;

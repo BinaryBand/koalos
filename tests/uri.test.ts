@@ -1,5 +1,5 @@
 import { isIpfsLink } from '@/tools/ipfs';
-import { isTezosLink } from '@/tezos/smart-contracts/metadata';
+import { isTezosLink } from '@/tezos/contracts/metadata';
 
 const CID_V0: string = 'QmSnuWmxptJZdLJpKRarxBMS2Ju2oANVrgbr2xWbie9b2D';
 const CID_V1: string = 'bafybeiaysi4s6lnjev27ln5icwm6tueaw2vdykrtjkwiphwekaywqhcjze';

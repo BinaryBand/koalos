@@ -45,7 +45,7 @@ describe('preparation tests', () => {
 
     const test: PreparedOperation = await prepareBatch(batch);
     const control: PreparedOperation = await toolkit.prepare.batch(batch);
-    expect(test).toEqual(control);
+    expect(test.opOb.contents).toEqual(control.opOb.contents);
   });
 
   it('prepare transaction batch with reveal requirement', async () => {

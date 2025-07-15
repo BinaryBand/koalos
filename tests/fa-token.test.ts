@@ -12,7 +12,7 @@ import { burnAddress, revealedAddress } from '@public/tests/wallet.json';
 import { createTransaction, prepare, Fa12Token, simulateOperation } from '@/index';
 import { TZip17Metadata, TZip21TokenMetadata } from '@/tezos/types';
 
-const blockchainInstance: BlockchainInstance = new BlockchainInstance();
+// const blockchainInstance: BlockchainInstance = new BlockchainInstance();
 
 const fa12Contract: string = 'KT1K9gCRgaLRFKTErYt1wVxA3Frb9FjasjTV'; // Kolibri USD
 // const fa2Contract_1: string = 'KT1XPFjZqCULSnqfKaaYy8hJjeY63UNSGwXg'; // CRUNCH DAO
@@ -22,6 +22,8 @@ const fa12Contract: string = 'KT1K9gCRgaLRFKTErYt1wVxA3Frb9FjasjTV'; // Kolibri 
 
 describe('FA-1.2 token contract', () => {
   // const fa12Instance: Fa12Token = new Fa12Token(fa12Contract, blockchainInstance);
+
+  const blockchainInstance: BlockchainInstance = new BlockchainInstance();
 
   const fa12Instance = blockchainInstance.getFaToken(fa12Contract) as Promise<Fa12Token>;
 

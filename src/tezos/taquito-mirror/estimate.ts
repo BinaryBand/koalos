@@ -5,8 +5,6 @@ import { MergedOperationResult } from '@taquito/taquito/dist/types/operations/er
 
 import { BlockchainInstance } from '@/tezos/provider';
 
-const blockchainInstance: BlockchainInstance = new BlockchainInstance();
-
 type Content = PreapplyResponse['contents'][0];
 
 const OP_SIZE_REVEAL: number = 324; // injecting size tz1=320, tz2=322, tz3=322, tz4=420(not supported)
@@ -63,6 +61,8 @@ function getEstimationContent(content: Content, opSize: number, byteCost: number
 }
 
 async function calculateEstimates(op: PreparedOperation) {
+  const blockchainInstance: BlockchainInstance = new BlockchainInstance();
+
   const params: ForgeParams = { branch: op.opOb.branch, contents: op.opOb.contents };
   const forged: string = await new LocalForger().forge(params);
 
