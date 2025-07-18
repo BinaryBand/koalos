@@ -8,6 +8,7 @@ declare type RPCSimulateOperationParam = import('@taquito/rpc').RPCSimulateOpera
 declare type TransactionOperationParameter = import('@taquito/rpc').TransactionOperationParameter;
 
 declare type BigMapResponse = import('@taquito/rpc').BigMapResponse;
+declare type BlockResponse = import('@taquito/rpc').BlockResponse;
 declare type ConstantsResponse = import('@taquito/rpc').ConstantsResponse;
 declare type ContractResponse = import('@taquito/rpc').ContractResponse;
 declare type EntrypointsResponse = import('@taquito/rpc').EntrypointsResponse;

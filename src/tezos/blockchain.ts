@@ -15,8 +15,7 @@ const FORGER: LocalForger = new LocalForger();
 export class BlockchainInstance {
   constructor(private context: RpcProvider) {}
 
-  public static createInstance(): BlockchainInstance {
-    const rpcInstance: RpcProvider = new RpcProvider();
+  public static createInstance(rpcInstance: RpcProvider = new RpcProvider()): BlockchainInstance {
     return new BlockchainInstance(rpcInstance);
   }
 

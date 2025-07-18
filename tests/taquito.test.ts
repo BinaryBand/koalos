@@ -24,7 +24,7 @@ const BURN_ADDRESS_SIGNER: Signer = {
   publicKeyHash: jest.fn().mockReturnValue(burnAddress),
 };
 
-const blockchainInstance: BlockchainInstance = BlockchainInstance.createInstance();
+const blockchainInstance: BlockchainInstance = BlockchainInstance.createInstance(RpcProvider.singleton);
 const toolkit: TezosToolkit = new TezosToolkit(RPC_URLS[Math.floor(Math.random() * RPC_URLS.length)]!);
 
 describe('preparation tests', () => {

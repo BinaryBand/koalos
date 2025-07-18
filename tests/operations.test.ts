@@ -13,12 +13,13 @@ import {
   simulateOperation,
 } from '@/index';
 import { BlockchainInstance } from '@/tezos/blockchain';
+import RpcProvider from '@/tezos/provider';
 
 import { burnPublicKey, burnAddress, revealedAddress } from '@public/tests/wallet.json';
 import { secretKey, publicKey, branch, protocol } from '@public/constants/stub-values.json';
 // import { code, storage } from '@public/tests/simple-contract.json';
 
-const blockchainInstance: BlockchainInstance = BlockchainInstance.createInstance();
+const blockchainInstance: BlockchainInstance = BlockchainInstance.createInstance(RpcProvider.singleton);
 const DEFAULT_SIGNER: InMemorySigner = new InMemorySigner(secretKey);
 const WATERMARK: Uint8Array = new Uint8Array([0x03]);
 

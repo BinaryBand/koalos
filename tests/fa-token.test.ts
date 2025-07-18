@@ -5,11 +5,12 @@ import { PreapplyResponse } from '@taquito/rpc';
 import { createTransaction, Fa12Token, Fa2Token, simulateOperation } from '@/index';
 import { Fa2Balance, TZip17Metadata, TZip21TokenMetadata } from '@/tezos/types';
 import { BlockchainInstance } from '@/tezos/blockchain';
+import RpcProvider from '@/tezos/provider';
 import { assert } from '@/tools/utils';
 
 import { burnAddress, revealedAddress } from '@public/tests/wallet.json';
 
-const blockchainInstance: BlockchainInstance = BlockchainInstance.createInstance();
+const blockchainInstance: BlockchainInstance = BlockchainInstance.createInstance(RpcProvider.singleton);
 const fa12Contract: string = 'KT1K9gCRgaLRFKTErYt1wVxA3Frb9FjasjTV'; // Kolibri USD
 const fa2Contract_1: string = 'KT1XPFjZqCULSnqfKaaYy8hJjeY63UNSGwXg'; // CRUNCH DAO
 const fa2Contract_2: string = 'KT18fp5rcTW7mbWDmzFwjLDUhs5MeJmagDSZ'; // Wrap Protocol
