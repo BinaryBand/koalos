@@ -105,8 +105,10 @@ export function decodeMichelsonValue<T>(value: unknown, schema?: Schema): T | un
  * @param michelsonMap - The MichelsonMap to unwrap.
  * @returns A promise that resolves to the unwrapped object of type `T`.
  */
-export function unwrapMichelsonMap<T extends Record<string, any>>(michelsonMap: MichelsonMap<Primitive, any>): T {
-  const result: Record<string, any> = {};
+export function unwrapMichelsonMap<T extends Record<string, unknown>>(
+  michelsonMap: MichelsonMap<Primitive, unknown>
+): T {
+  const result: Record<string, unknown> = {};
   const valueSchema: Schema | undefined = michelsonMap['valueSchema'];
 
   for (const [key, value] of michelsonMap.entries()) {

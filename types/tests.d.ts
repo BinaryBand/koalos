@@ -3,7 +3,7 @@ interface HttpRequestOptions {
   method?: 'GET' | 'POST';
   timeout?: number;
   json?: boolean;
-  query?: Record<string, any>;
+  query?: Record<string, unknown>;
   headers?: { [key: string]: string };
   mimeType?: string;
 }

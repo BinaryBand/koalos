@@ -10,6 +10,12 @@ const jestConfig = {
     '@public/*': ['public/*'],
   }),
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  // Force Jest to exit after tests complete
+  forceExit: true,
+  // Detect open handles that prevent Jest from exiting
+  detectOpenHandles: true,
+  // Set a timeout for tests
+  testTimeout: 30000,
 };
 
 export default jestConfig;

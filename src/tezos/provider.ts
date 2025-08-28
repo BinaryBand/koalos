@@ -29,7 +29,11 @@ function isTezosGenericOperationError(error: unknown): error is TezosGenericOper
   );
 }
 
-function handlePotentialOperationError(result: any, message: string, meta: OperationContentsAndResult[] = []): void {
+function handlePotentialOperationError(
+  result: unknown,
+  message: string,
+  meta: OperationContentsAndResult[] = []
+): void {
   if (isTezosGenericOperationError(result)) {
     throw new TezosOperationError(result, message, meta);
   }

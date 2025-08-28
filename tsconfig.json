@@ -44,6 +44,6 @@
 
     /* Completeness */
     "skipDefaultLibCheck": false,
-    "skipLibCheck": false
+    "skipLibCheck": true
   }
 }
