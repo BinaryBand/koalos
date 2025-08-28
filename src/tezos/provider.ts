@@ -6,12 +6,57 @@ import { toExpr } from '@/tezos/encoders';
 
 import RPC_URLS from '@public/constants/rpc-providers.json';
 
-const TaquitoInstance: TezosToolkit = new TezosToolkit('');
-function Tezos(rpc?: string): TezosToolkit {
-  const randomIndex: number = Math.floor(Math.random() * RPC_URLS.length);
-  rpc ??= RPC_URLS[randomIndex]!;
-  TaquitoInstance.setProvider({ rpc });
-  return TaquitoInstance;
+// Create multiple Taquito instances for racing
+function getTezosInstances(count: number = 2): TezosToolkit[] {
+  const instances: TezosToolkit[] = [];
+  const usedIndices = new Set<number>();
+
+  for (let i = 0; i < Math.min(count, RPC_URLS.length); i++) {
+    let randomIndex: number;
+    do {
+      randomIndex = Math.floor(Math.random() * RPC_URLS.length);
+    } while (usedIndices.has(randomIndex));
+
+    usedIndices.add(randomIndex);
+    const instance = new TezosToolkit(RPC_URLS[randomIndex]!);
+    instances.push(instance);
+  }
+
+  return instances;
+}
+
+// Race multiple RPC calls and return the fastest
+async function raceRpcCalls<T>(rpcCall: (tezos: TezosToolkit) => Promise<T>): Promise<T> {
+  const instances = getTezosInstances(2);
+
+  const promises = instances.map(async (instance, index) => {
+    try {
+      const result = await rpcCall(instance);
+      return { result, index, success: true };
+    } catch (error) {
+      return { error, index, success: false };
+    }
+  });
+
+  // Race all promises
+  const results = await Promise.allSettled(promises);
+
+  // Find the first successful result
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value.success) {
+      return result.value.result as T;
+    }
+  }
+
+  // If no successful results, throw the first error
+  for (const result of results) {
+    if (result.status === 'fulfilled' && !result.value.success) {
+      throw result.value.error;
+    }
+  }
+
+  // If all promises were rejected, throw a generic error
+  throw new Error('All RPC calls failed');
 }
 
 function isTezosGenericOperationError(error: unknown): error is TezosGenericOperationError[] {
@@ -44,6 +89,7 @@ import { Mutex, MutexInterface } from 'async-mutex';
 export default class RpcProvider {
   private cache = new LRUCache({ max: 500, ttl: 1000 * 8 }); // 1 block delay
   private mutex: Mutex = new Mutex();
+  private pendingRequests = new Map<string, Promise<any>>();
 
   public static singleton: RpcProvider = new RpcProvider();
 
@@ -64,67 +110,100 @@ export default class RpcProvider {
     }
   }
 
-  private async calculateTtl(expirationType: 'block' | 'cycle', opts?: RPCOptions): Promise<number> {
-    const headBlock: BlockResponse = await this.getBlock(opts);
-    const constants: ConstantsResponse = this.getCachedValue('constants') ?? (await Tezos().rpc.getConstants(opts));
+  private async calculateTtl(expirationType: 'block' | 'cycle'): Promise<number> {
+    // Use simple fixed TTLs to avoid circular dependencies
+    if (expirationType === 'cycle') {
+      return 1000 * 60 * 60; // 1 hour for cycle-based data
+    } else {
+      return 1000 * 8; // 8 seconds for block-based data
+    }
+  }
 
-    const { metadata } = headBlock;
-    const { minimal_block_delay, blocks_per_cycle, time_between_blocks } = constants;
+  private async getOrFetch<T>(key: string, fetcher: () => Promise<T>, ttl: number, errorMessage: string): Promise<T> {
+    // Check cache first
+    const cached = this.getCachedValue<T>(key);
+    if (cached !== undefined) {
+      return cached;
+    }
 
-    const minBlockDelay: number = parseInt(`${minimal_block_delay ?? time_between_blocks[0] ?? 8}`, 10);
-    const cyclePosition: number = metadata.level_info?.cycle_position ?? blocks_per_cycle - 1;
-    const blocksLeftInCycle: number = blocks_per_cycle - cyclePosition;
+    // Check if request is already pending
+    const pending = this.pendingRequests.get(key);
+    if (pending) {
+      return pending as Promise<T>;
+    }
 
-    await this.setCachedValue('headBlock', headBlock, 1000 * minBlockDelay);
-    await this.setCachedValue('constants', constants, 1000 * minBlockDelay * blocksLeftInCycle);
+    // Create new request
+    const request = this.fetchAndCache(key, fetcher, ttl, errorMessage);
+    this.pendingRequests.set(key, request);
 
-    return expirationType === 'block' ? 1000 * minBlockDelay : 1000 * minBlockDelay * blocksLeftInCycle;
+    try {
+      const result = await request;
+      return result;
+    } finally {
+      this.pendingRequests.delete(key);
+    }
+  }
+
+  private async fetchAndCache<T>(
+    key: string,
+    fetcher: () => Promise<T>,
+    ttl: number,
+    errorMessage: string
+  ): Promise<T> {
+    try {
+      const result = await fetcher();
+      handlePotentialOperationError(result, errorMessage);
+      if (result !== null && result !== undefined) {
+        await this.setCachedValue(key, result as T & {}, ttl);
+      }
+      return result;
+    } catch (error) {
+      handlePotentialOperationError(error, errorMessage);
+      throw error;
+    }
   }
 
   public async getChainId(): Promise<string> {
-    let chainId: string | undefined = this.getCachedValue<string>('chainId');
-    if (!chainId) {
-      chainId = await Tezos().rpc.getChainId();
-
-      const ttl: number = await this.calculateTtl('cycle');
-      await this.setCachedValue('chainId', chainId, ttl);
-    }
-    handlePotentialOperationError(chainId, 'Failed to get chain ID');
-    return chainId;
+    const ttl = await this.calculateTtl('cycle');
+    return this.getOrFetch(
+      'chainId',
+      () => raceRpcCalls((tezos) => tezos.rpc.getChainId()),
+      ttl,
+      'Failed to get chain ID'
+    );
   }
 
   public async getConstants(opts?: RPCOptions): Promise<ConstantsResponse> {
     const constantsCacheKey: string = `constants_${opts?.block ?? 'head'}`;
-    const constants: ConstantsResponse =
-      this.getCachedValue(constantsCacheKey) ?? (await Tezos().rpc.getConstants(opts));
-    handlePotentialOperationError(constants, `Failed to get constants at block ${opts?.block ?? 'head'}`);
-    this.setCachedValue(constantsCacheKey, constants, 100000);
-    return constants;
+    const ttl = 100000; // Long TTL for constants
+    return this.getOrFetch(
+      constantsCacheKey,
+      () => raceRpcCalls((tezos) => tezos.rpc.getConstants(opts)),
+      ttl,
+      `Failed to get constants at block ${opts?.block ?? 'head'}`
+    );
   }
 
   public async getProtocols(opts?: RPCOptions): Promise<ProtocolsResponse> {
     const cacheKey: string = `protocols_${opts?.block ?? 'head'}`;
-
-    let protocols: ProtocolsResponse | undefined = this.getCachedValue(cacheKey);
-    if (!protocols) {
-      protocols = await Tezos().rpc.getProtocols(opts);
-
-      const ttl: number = await this.calculateTtl('cycle', opts);
-      await this.setCachedValue(cacheKey, protocols, ttl);
-    }
-
-    handlePotentialOperationError(protocols, `Failed to get protocols at block ${opts?.block ?? 'head'}`);
-    return protocols;
+    const ttl = await this.calculateTtl('cycle');
+    return this.getOrFetch(
+      cacheKey,
+      () => raceRpcCalls((tezos) => tezos.rpc.getProtocols(opts)),
+      ttl,
+      `Failed to get protocols at block ${opts?.block ?? 'head'}`
+    );
   }
 
   public async getBlock(opts?: RPCOptions): Promise<BlockResponse> {
     const cacheKey: string = `block_${opts?.block ?? 'head'}`;
-    const block: BlockResponse = this.getCachedValue(cacheKey) ?? (await Tezos().rpc.getBlock(opts));
-    const { minimal_block_delay, time_between_blocks } = await this.getConstants(opts);
-    const minBlockDelay: number = parseInt(`${minimal_block_delay ?? time_between_blocks[0] ?? 8}`, 10);
-    await this.setCachedValue(cacheKey, block, 1000 * minBlockDelay);
-    handlePotentialOperationError(block, `Failed to get block at ${opts?.block ?? 'head'}`);
-    return block;
+    const ttl = await this.calculateTtl('block');
+    return this.getOrFetch(
+      cacheKey,
+      () => raceRpcCalls((tezos) => tezos.rpc.getBlock(opts)),
+      ttl,
+      `Failed to get block at ${opts?.block ?? 'head'}`
+    );
   }
 
   public async getBlockHash(opts?: RPCOptions): Promise<string> {
@@ -133,32 +212,24 @@ export default class RpcProvider {
 
   public async getManagerKey(address: string, opts?: RPCOptions): Promise<ManagerKeyResponse | undefined> {
     const cacheKey: string = `managerKey_${address}_${opts?.block ?? 'head'}`;
-
-    let managerKey: ManagerKeyResponse | undefined = this.getCachedValue(cacheKey);
-    if (!managerKey) {
-      managerKey = await Tezos().rpc.getManagerKey(address, opts);
-
-      const ttl: number = await this.calculateTtl(managerKey ? 'cycle' : 'block', opts);
-      await this.setCachedValue(cacheKey, managerKey, ttl);
-    }
-
-    handlePotentialOperationError(managerKey, `Failed to get manager key for address ${address}`);
-    return managerKey;
+    const ttl = await this.calculateTtl('cycle');
+    return this.getOrFetch(
+      cacheKey,
+      () => raceRpcCalls((tezos) => tezos.rpc.getManagerKey(address, opts)),
+      ttl,
+      `Failed to get manager key for address ${address}`
+    );
   }
 
   public async getContractResponse(address: string, opts?: RPCOptions): Promise<ContractResponse | undefined> {
     const cacheKey: string = `contract_${address}_${opts?.block ?? 'head'}`;
-
-    let contract: ContractResponse | undefined = this.getCachedValue(cacheKey);
-    if (!contract) {
-      contract = await Tezos().rpc.getContract(address, opts);
-
-      const ttl: number = await this.calculateTtl('block', opts);
-      await this.setCachedValue(cacheKey, contract, ttl);
-    }
-
-    handlePotentialOperationError(contract, `Failed to get contract ${address}`);
-    return contract;
+    const ttl = await this.calculateTtl('block');
+    return this.getOrFetch(
+      cacheKey,
+      () => raceRpcCalls((tezos) => tezos.rpc.getContract(address, opts)),
+      ttl,
+      `Failed to get contract ${address}`
+    );
   }
 
   public async getScriptResponse(address: string, opts?: RPCOptions): Promise<ScriptResponse | undefined> {
@@ -167,52 +238,37 @@ export default class RpcProvider {
 
   public async getStorageResponse(address: string, opts?: RPCOptions): Promise<StorageResponse | undefined> {
     const cacheKey: string = `storage_${address}_${opts?.block ?? 'head'}`;
-
-    let storage: StorageResponse | undefined = this.getCachedValue(cacheKey);
-    if (!storage) {
-      storage = await Tezos().rpc.getStorage(address, opts);
-
-      const ttl: number = await this.calculateTtl('block', opts);
-      await this.setCachedValue(cacheKey, storage, ttl);
-    }
-
-    handlePotentialOperationError(storage, `Failed to get storage for contract ${address}`);
-    return storage;
+    const ttl = await this.calculateTtl('block');
+    return this.getOrFetch(
+      cacheKey,
+      () => raceRpcCalls((tezos) => tezos.rpc.getStorage(address, opts)),
+      ttl,
+      `Failed to get storage for contract ${address}`
+    );
   }
 
   public async getEntrypointsResponse(address: string, opts?: RPCOptions): Promise<EntrypointsResponse | undefined> {
     const cacheKey: string = `entrypoints_${address}_${opts?.block ?? 'head'}`;
-
-    let entrypoints: EntrypointsResponse | undefined = this.getCachedValue(cacheKey);
-    if (!entrypoints) {
-      entrypoints = await Tezos().rpc.getEntrypoints(address, opts);
-
-      const ttl: number = await this.calculateTtl('block', opts);
-      await this.setCachedValue(cacheKey, entrypoints, ttl);
-    }
-
-    handlePotentialOperationError(entrypoints, `Failed to get entrypoints for contract ${address}`);
-    return entrypoints;
+    const ttl = await this.calculateTtl('block');
+    return this.getOrFetch(
+      cacheKey,
+      () => raceRpcCalls((tezos) => tezos.rpc.getEntrypoints(address, opts)),
+      ttl,
+      `Failed to get entrypoints for contract ${address}`
+    );
   }
 
   public async getBigMapValue(id: string, key: Primitive, opts?: RPCOptions): Promise<BigMapResponse | undefined> {
     const expr: string = toExpr(key);
     const cacheKey: string = `bigMap_${id}_${expr}_${opts?.block ?? 'head'}`;
+    const ttl = await this.calculateTtl('block');
 
-    let bigMapValue: BigMapResponse | undefined = this.getCachedValue(cacheKey);
-    if (!bigMapValue) {
-      bigMapValue = await Tezos()
-        .rpc.getBigMapExpr(id, expr, opts)
-        .catch(() => undefined);
-
-      if (bigMapValue) {
-        const ttl: number = await this.calculateTtl('block', opts);
-        await this.setCachedValue(cacheKey, bigMapValue, ttl);
-      }
-    }
-
-    handlePotentialOperationError(bigMapValue, `Failed to get big map value for id ${id} with key ${toExpr(key)}`);
-    return bigMapValue;
+    return this.getOrFetch(
+      cacheKey,
+      () => raceRpcCalls((tezos) => tezos.rpc.getBigMapExpr(id, expr, opts).catch(() => undefined)),
+      ttl,
+      `Failed to get big map value for id ${id} with key ${toExpr(key)}`
+    );
   }
 
   public async runView(
@@ -224,27 +280,24 @@ export default class RpcProvider {
     const chain_id: string = await this.getChainId();
     const expr: string = toExpr(JSON.stringify(input));
     const cacheKey: string = `runView_${contract}_${entrypoint}_${expr}_${opts?.block ?? 'head'}`;
+    const ttl = await this.calculateTtl('block');
 
-    let result: RunViewResult | undefined = this.getCachedValue(cacheKey);
-    if (!result) {
-      result = await Tezos().rpc.runView({ contract, entrypoint, input, chain_id }, opts);
-
-      const ttl: number = await this.calculateTtl('block', opts);
-      await this.setCachedValue(cacheKey, result, ttl);
-    }
-
-    handlePotentialOperationError(result, `Failed to run view on contract ${contract} with entrypoint ${entrypoint}`);
-    return result;
+    return this.getOrFetch(
+      cacheKey,
+      () => raceRpcCalls((tezos) => tezos.rpc.runView({ contract, entrypoint, input, chain_id }, opts)),
+      ttl,
+      `Failed to run view on contract ${contract} with entrypoint ${entrypoint}`
+    );
   }
 
   public async simulateOperation(operation: RPCSimulateOperationParam, opts?: RPCOptions): Promise<PreapplyResponse> {
-    const simulation: PreapplyResponse = await Tezos().rpc.simulateOperation(operation, opts);
-    handlePotentialOperationError(simulation, `Failed simulation: ${(JSON.stringify(operation), null, 2)}`);
+    const simulation: PreapplyResponse = await raceRpcCalls((tezos) => tezos.rpc.simulateOperation(operation, opts));
+    handlePotentialOperationError(simulation, `Failed simulation: ${JSON.stringify(operation, null, 2)}`);
     return simulation;
   }
 
   public async injectOperation(signedOperation: string): Promise<string> {
-    const injectionResult: string = await Tezos().rpc.injectOperation(signedOperation);
+    const injectionResult: string = await raceRpcCalls((tezos) => tezos.rpc.injectOperation(signedOperation));
     handlePotentialOperationError(injectionResult, `Failed to inject operation: ${signedOperation}`);
     return injectionResult;
   }
