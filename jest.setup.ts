@@ -206,7 +206,32 @@ jest.mock('@taquito/http-utils', () => ({
                 return undefined;
               }
 
-              const result = json ? await res.json() : await res.text();
+              let result;
+              if (json) {
+                // Clone the response immediately to avoid "Body is unusable" error
+                const clonedResponse = res.clone();
+                try {
+                  result = await res.json();
+                } catch (jsonError) {
+                  // If JSON parsing fails, try to get text from cloned response
+                  try {
+                    const textResponse = await clonedResponse.text();
+                    console.warn(`JSON parsing failed for ${url}, treating as text:`, textResponse);
+
+                    // If it looks like an error message, throw it as an error
+                    if (textResponse.startsWith('Failed to') || textResponse.includes('error') || !res.ok) {
+                      throw new Error(textResponse);
+                    }
+                    result = textResponse;
+                  } catch (textError) {
+                    // If we can't read as text either, throw the original JSON error
+                    console.warn(`Both JSON and text parsing failed for ${url}:`, jsonError, textError);
+                    throw jsonError;
+                  }
+                }
+              } else {
+                result = await res.text();
+              }
 
               return result;
             } catch (error) {
